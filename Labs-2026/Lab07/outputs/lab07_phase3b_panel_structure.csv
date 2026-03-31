@@ -1,0 +1,2 @@
+n_paises,n_anos,n_duplicatas_ccode_year,estrutura_compativel,observacao
+41,19,0,TRUE,Estrutura compatível com painel país-ano; não há duplicatas em ccode-year_actual.

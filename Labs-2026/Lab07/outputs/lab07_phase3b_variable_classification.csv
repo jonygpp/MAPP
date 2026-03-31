@@ -1,0 +1,20 @@
+variavel,papel,obrigatoriedade,status,observacao
+ccode,identificador de país,obrigatória,encontrada,"Alias canônico disponível em `CCODE`, reconstituído ou preservado a partir de `ccode`."
+year_actual,identificador temporal,obrigatória,encontrada,"Alias canônico disponível em `YEAR_ACTUAL`, reconstituído a partir de `year` conforme decisão herdada da Fase 3A."
+any_prio,desfecho principal,obrigatória,encontrada,Variável central confirmada com base na decisão validada da Fase 3A.
+gdp_g,endógena principal,obrigatória,encontrada,Variável central confirmada com base na decisão validada da Fase 3A.
+gdp_g_l,endógena defasada,obrigatória,encontrada,Variável central confirmada com base na decisão validada da Fase 3A.
+gpcp_g,instrumento principal,obrigatória,encontrada,"Disponível com padronização controlada de capitalização, registrada em tabela própria."
+gpcp_g_l,instrumento defasado,obrigatória,encontrada,"Disponível com padronização controlada de capitalização, registrada em tabela própria."
+y_0,controle de renda inicial,obrigatória,encontrada,Variável central confirmada com base na decisão validada da Fase 3A.
+polity2l,controle político,obrigatória,encontrada,Variável central confirmada com base na decisão validada da Fase 3A.
+ethfrac,controle estrutural,obrigatória,encontrada,Variável central confirmada com base na decisão validada da Fase 3A.
+relfrac,controle estrutural,obrigatória,encontrada,Variável central confirmada com base na decisão validada da Fase 3A.
+oil,controle estrutural,obrigatória,encontrada,"Disponível com padronização controlada de capitalização, registrada em tabela própria."
+lmtnest,controle estrutural,obrigatória,encontrada,Variável central confirmada com base na decisão validada da Fase 3A.
+lpopl1,controle estrutural,obrigatória,encontrada,Variável central confirmada com base na decisão validada da Fase 3A.
+war_prio,desfecho de robustez mínima,opcional,encontrada,Variável opcional confirmada; não exigida para construir df_main.
+any_prio_nar,desfecho narrow,opcional,encontrada,Variável opcional confirmada; não exigida para construir df_main.
+war_prio_nar,desfecho narrow,opcional,encontrada,Variável opcional confirmada; não exigida para construir df_main.
+country_name,rótulo do país,opcional,encontrada,Variável opcional confirmada; não exigida para construir df_main.
+country_code,código textual do país,opcional,encontrada,Variável opcional confirmada; não exigida para construir df_main.

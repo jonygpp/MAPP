@@ -1,0 +1,7 @@
+criterio,status,detalhe
+df_main igual ao N final da Fase 3B,ok,N = 743 (igual à Fase 3B)
+year_trend sem alteração de N,ok,N antes = 743; N depois = 743
+join com variáveis opcionais sem perda de observações,ok,N final = 743; sem duplicatas introduzidas
+war_prio sem NA após join,ok,war_prio: 743 obs não nulas
+any_prio_nar sem NA após join,ok,any_prio_nar: 743 obs não nulas
+war_prio_nar sem NA após join,ok,war_prio_nar: 743 obs não nulas

@@ -1,0 +1,21 @@
+conceito,nome_na_base,papel_no_modelo,status,observacao,nome_esperado
+Identificação,ccode,cluster e tendência por país,encontrada,,CCODE
+Identificação,YEAR_ACTUAL,tendência temporal,encontrada,,YEAR_ACTUAL
+Identificação,ccode,rótulo/checagem,encontrada,,COUNTRY_NAME
+Identificação,ccode,rótulo/checagem,encontrada,,COUNTRY_CODE
+Desfecho,ccode,desfecho principal,encontrada,,ANY_PRIO
+Desfecho,ccode,robustez mínima obrigatória,encontrada,,WAR_PRIO
+Desfecho,ccode,robustez opcional (narrow),encontrada,,ANY_PRIO_NAR
+Desfecho,ccode,robustez opcional (narrow),encontrada,,WAR_PRIO_NAR
+Endógena,ccode,endógena principal,encontrada,,GDP_G
+Endógena,ccode,endógena principal (defasagem),encontrada,,GDP_G_L
+Instrumento,ccode,instrumento principal,encontrada,,GPCP_G
+Instrumento,ccode,instrumento principal (defasagem),encontrada,,GPCP_G_L
+Controle,lgdpenl1,renda inicial (ou equivalente),encontrada,,LGDPENL1
+Controle,ccode,controle político,encontrada,,POLITY2L
+Controle,ccode,controle estrutural,encontrada,,ETHFRAC
+Controle,ccode,controle estrutural,encontrada,,RELFRAC
+Controle,ccode,controle estrutural,encontrada,,OIL
+Controle,ccode,controle estrutural,encontrada,,LMTNEST
+Controle,ccode,controle estrutural,encontrada,,LPOPL1
+Tendência,YEAR_ACTUAL,tendência temporal específica,encontrada,,YEAR_ACTUAL

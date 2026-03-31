@@ -1,0 +1,6 @@
+Lab07 Fase 3B — Interpretação curta das descritivas
+- `any_prio` tem média 0.268, sugerindo incidência relativamente baixa do desfecho principal na amostra.
+- `gdp_g` e `gdp_g_l` variam em torno de zero, com valores positivos e negativos plausíveis para taxas de crescimento econômico.
+- `gpcp_g` e `gpcp_g_l` também exibem sinais positivos e negativos, coerentes com choques de crescimento de chuva.
+- Variáveis como `oil` são claramente assimétricas por serem binárias e de baixa prevalência média (0.118), enquanto `lpopl1` e `lmtnest` operam em escalas distintas que exigem atenção interpretativa na fase seguinte.
+- `war_prio` está disponível e foi incluída nas descritivas; média = 0.167.

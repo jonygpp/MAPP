@@ -1,0 +1,21 @@
+		mod_ols_simple	mod_ols_full	mod_rf_main	mod_iv_main
+1	 	OLS simples (associativo)	OLS ampliado (associativo)	Reduced form	IV second stage
+2	Dependent Var.:	any_prio	any_prio	any_prio	any_prio
+3	  	 	 	 	 
+4	Constant	0.2660*** (0.0520)	  	  	  
+5	gdp_g	-0.3094 (0.2753)	-0.1737 (0.1443)	  	-1.151 (1.459)
+6	gdp_g_l	-0.0727 (0.2531)	0.0992 (0.1683)	  	-2.619* (1.228)
+7	polity2l	  	0.0003 (0.0044)	0.0005 (0.0045)	-0.0016 (0.0055)
+8	oil	  	0.0680 (0.0441)	0.0686. (0.0371)	-0.0972 (0.1250)
+9	lpopl1	  	0.8055 (0.7077)	0.7553 (0.7030)	-0.3175 (1.136)
+10	gpcp_g	  	  	-0.0207 (0.0420)	  
+11	gpcp_g_l	  	  	-0.1138* (0.0505)	  
+12	Fixed-Effects:	------------------	----------------	-----------------	----------------
+13	ccode	No	Yes	Yes	Yes
+14	Varying Slopes:	------------------	----------------	-----------------	----------------
+15	year_trend (ccode)	No	Yes	Yes	Yes
+16	__________________	__________________	________________	_________________	________________
+17	S.E.: Clustered	by: ccode	by: ccode	by: ccode	by: ccode
+18	Observations	743	743	743	743
+19	R2	0.00261	0.70849	0.70991	0.70991
+20	Within R2	--	0.00996	0.01477	0.01477

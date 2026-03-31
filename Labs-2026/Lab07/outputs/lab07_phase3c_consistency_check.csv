@@ -1,0 +1,6 @@
+criterio,status,detalhe
+N df_main igual ao N_final validado na 3B,ok,N atual = 743 e N_validado_3B = 743
+variáveis obrigatórias da 3B presentes em df_main,ok,Conjunto obrigatório preservado.
+variáveis da 3C pertencem ao conjunto validado,ok,"Variáveis usadas: any_prio, gdp_g, gdp_g_l, ccode, y_0, polity2l, ethfrac, relfrac, oil, lmtnest, lpopl1, year_actual"
+sem observações incompletas nas obrigatórias,ok,Completeness mantida em 100% nas obrigatórias.
+criação de year_trend sem perda de N,ok,N antes = 743; N depois = 743

@@ -1,0 +1,20 @@
+conceito,nome_na_base,papel_no_modelo,status,observacao,nome_esperado
+Identificação,CCODE,cluster,encontrada,,CCODE
+Identificação,YEAR_ACTUAL,tendência temporal,encontrada,,YEAR_ACTUAL
+Identificação,country_name,identificação do país,encontrada,encontrada por diferença de capitalização/alias explícito,COUNTRY_NAME
+Identificação,country_code,identificação do país,encontrada,encontrada por diferença de capitalização/alias explícito,COUNTRY_CODE
+Desfecho,any_prio,desfecho principal,encontrada,encontrada por diferença de capitalização/alias explícito,ANY_PRIO
+Desfecho,war_prio,robustez mínima,encontrada,encontrada por diferença de capitalização/alias explícito,WAR_PRIO
+Desfecho,any_prio_nar,robustez opcional narrow,encontrada,encontrada por diferença de capitalização/alias explícito,ANY_PRIO_NAR
+Desfecho,war_prio_nar,robustez opcional narrow,encontrada,encontrada por diferença de capitalização/alias explícito,WAR_PRIO_NAR
+Endógena,gdp_g,endógena,encontrada,encontrada por diferença de capitalização/alias explícito,GDP_G
+Endógena,gdp_g_l,endógena defasada,encontrada,encontrada por diferença de capitalização/alias explícito,GDP_G_L
+Instrumento,GPCP_g,instrumento,encontrada,encontrada por diferença de capitalização/alias explícito,GPCP_G
+Instrumento,GPCP_g_l,instrumento defasado,encontrada,encontrada por diferença de capitalização/alias explícito,GPCP_G_L
+Controle,y_0,renda inicial,encontrada,encontrada por diferença de capitalização/alias explícito,Y_0
+Controle,polity2l,controle político,encontrada,encontrada por diferença de capitalização/alias explícito,POLITY2L
+Controle,ethfrac,controle estrutural,encontrada,encontrada por diferença de capitalização/alias explícito,ETHFRAC
+Controle,relfrac,controle estrutural,encontrada,encontrada por diferença de capitalização/alias explícito,RELFRAC
+Controle,Oil,controle estrutural,encontrada,encontrada por diferença de capitalização/alias explícito,OIL
+Controle,lmtnest,controle estrutural,encontrada,encontrada por diferença de capitalização/alias explícito,LMTNEST
+Controle,lpopl1,controle estrutural,encontrada,encontrada por diferença de capitalização/alias explícito,LPOPL1

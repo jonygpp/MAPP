@@ -1,0 +1,15 @@
+variavel,classe_r,numero_missing,numero_valores_unicos,minimo,maximo,observacao_coerencia,classe_compativel
+ccode,numeric,0,41,404,625,"Identificador de país estável e com múltiplos valores distintos, compatível com painel país-ano.",TRUE
+year_actual,numeric,0,19,1981,1999,Variável temporal numérica compatível com o recorte do estudo; intervalo observado: 1981-1999.,TRUE
+any_prio,numeric,0,2,0,1,"Compatível com indicador binário 0/1; valores observados: 0, 1.",TRUE
+gdp_g,numeric,0,730,-0.4739726483821869,0.6704120635986328,Variável numérica com dispersão e variabilidade compatíveis com taxa de crescimento.,TRUE
+gdp_g_l,numeric,0,729,-0.4739726483821869,0.6704120635986328,Variável numérica com dispersão e variabilidade compatíveis com taxa de crescimento.,TRUE
+gpcp_g,numeric,0,743,-0.5498713254928589,1.6769756078720093,Variável numérica com sinais positivo e negativo plausíveis para crescimento de chuva.,TRUE
+gpcp_g_l,numeric,0,743,-0.5498713254928589,1.6769756078720093,Variável numérica com sinais positivo e negativo plausíveis para crescimento de chuva.,TRUE
+y_0,numeric,0,38,0.3160000145435333,4.8420000076293945,Controle com classe compatível com regressão linear e faixa observada plausível.,TRUE
+polity2l,numeric,0,20,-10,9,Controle com classe compatível com regressão linear e faixa observada plausível.,TRUE
+ethfrac,numeric,0,41,0.03551065921783447,0.925034761428833,Controle com classe compatível com regressão linear e faixa observada plausível.,TRUE
+relfrac,numeric,0,34,0,0.782800018787384,Controle com classe compatível com regressão linear e faixa observada plausível.,TRUE
+oil,numeric,0,2,0,1,Controle com classe compatível com regressão linear e faixa observada plausível.,TRUE
+lmtnest,numeric,0,30,0,4.421247482299805,Controle com classe compatível com regressão linear e faixa observada plausível.,TRUE
+lpopl1,numeric,0,736,5.71702766418457,11.705669403076172,Controle com classe compatível com regressão linear e faixa observada plausível.,TRUE

@@ -1,0 +1,7 @@
+arquivo_requerido,caminho_preferencial,caminho_detectado,existe,observacao
+AGENTS.md,AGENTS.md,AGENTS.md,TRUE,
+Workflow-Projeto.md,Workflow-Projeto.md,Workflow-Projeto.md,TRUE,
+files_list.md,files_list.md,docs/files_list.md,TRUE,arquivo encontrado em docs/ (não na raiz)
+Data/mss_repdata_feb07.dta,Data/mss_repdata_feb07.dta,Data/mss_repdata_feb07.dta,TRUE,
+Data/mss_manual_feb07.pdf,Data/mss_manual_feb07.pdf,Data/mss_manual_feb07.pdf,TRUE,
+Data/mss_rep_results.do,Data/mss_rep_results.do,Data/mss_rep_results.do,TRUE,

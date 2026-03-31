@@ -1,0 +1,5 @@
+Lab07 Fase 3D — Nota de first stage
+- F-stat first stage para gdp_g: 6.399 (p = 0.00176).
+- F-stat first stage para gdp_g_l: 5.138 (p = 0.00609).
+- A regra de bolso F>10 é apenas referência inicial; aqui os valores sugerem força limitada/moderada em pelo menos parte dos estágios.
+- Com múltiplas endógenas e múltiplos instrumentos, o diagnóstico deve ser lido por equação de first stage e em conjunto com hipóteses de exclusão.

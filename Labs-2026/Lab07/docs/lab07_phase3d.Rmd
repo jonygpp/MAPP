@@ -1,0 +1,563 @@
+---
+title: "Lab07 MAPP — Fase 3D (first stage, reduced form e IV principal)"
+author: "Agente executor IA"
+date: "2026-03-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+```
+
+## Escopo da fase
+
+**Modo principal:** empirical analysis  
+**Sequência secundária:** project integration (atualização incremental do README)
+
+Esta fase executa apenas:
+
+1. validação de consistência com as Fases 3B e 3C;
+2. estimação de `mod_iv_main` com recuperação de estágios;
+3. diagnóstico explícito de first stage, incluindo F-stat;
+4. estimação da reduced form principal `mod_rf_main`;
+5. comparação legível OLS vs reduced form vs IV;
+6. atualização incremental do `README.md`;
+7. geração de handoff da Fase 3D.
+
+Não inclui robustez com `war_prio`, extensões narrow, comparação final com robustez nem encerramento integral do laboratório.
+
+## Bloco D0 — Pré-requisitos obrigatórios
+
+```{r bloco-d0-prerequisitos}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(readr)
+  library(tidyr)
+  library(tibble)
+  library(stringr)
+  library(purrr)
+  library(fixest)
+  library(broom)
+  library(fs)
+})
+
+if (!dir_exists("outputs")) dir_create("outputs")
+if (!dir_exists("docs")) dir_create("docs")
+if (!dir_exists("logs")) dir_create("logs")
+
+prereq_tbl <- tibble(
+  artefato = c(
+    "df_main validado na Fase 3B",
+    "outputs OLS validados da Fase 3C",
+    "tabela de padronização da Fase 3B",
+    "README.md na raiz",
+    "artefato principal até a Fase 3C"
+  ),
+  caminho = c(
+    "outputs/lab07_phase3b_df_main.rds",
+    "outputs/lab07_phase3c_ols_comparison_tidy.csv",
+    "outputs/lab07_phase3b_name_standardization.csv",
+    "README.md",
+    "docs/lab07_phase3c.Rmd"
+  ),
+  existe = file_exists(caminho)
+)
+
+write_csv(prereq_tbl, "outputs/lab07_phase3d_prerequisites_check.csv")
+
+missing_prereq <- prereq_tbl %>% filter(!existe)
+if (nrow(missing_prereq) > 0) {
+  stop(
+    "Pré-requisitos ausentes para a Fase 3D: ",
+    paste(missing_prereq$caminho, collapse = ", "),
+    ". Execução interrompida."
+  )
+}
+```
+
+## Bloco D1 — Consistência explícita com as Fases 3B e 3C
+
+```{r bloco-d1-consistencia}
+df_main <- readRDS("outputs/lab07_phase3b_df_main.rds")
+classification_tbl <- read_csv("outputs/lab07_phase3b_variable_classification.csv", show_col_types = FALSE)
+sample_summary_3b <- read_csv("outputs/lab07_phase3b_sample_summary.csv", show_col_types = FALSE)
+
+required_validated <- classification_tbl %>%
+  filter(obrigatoriedade == "obrigatória", status == "encontrada") %>%
+  pull(variavel)
+
+iv_vars <- c(
+  "any_prio", "gdp_g", "gdp_g_l", "gpcp_g", "gpcp_g_l",
+  "y_0", "polity2l", "ethfrac", "relfrac", "oil", "lmtnest", "lpopl1",
+  "ccode", "year_actual"
+)
+
+n_final_3b <- sample_summary_3b %>% filter(indicador == "N_final") %>% pull(valor)
+if (length(n_final_3b) != 1) {
+  stop("Checkpoint D1 FALHOU: N_final da Fase 3B não está identificado de forma unívoca.")
+}
+
+if (nrow(df_main) != n_final_3b) {
+  stop(
+    "Checkpoint D1 FALHOU: N de df_main divergente da Fase 3B (", nrow(df_main),
+    " vs ", n_final_3b, ")."
+  )
+}
+
+if (!all(iv_vars %in% required_validated)) {
+  invalid_vars <- setdiff(iv_vars, required_validated)
+  stop(
+    "Checkpoint D1 FALHOU: variáveis do IV fora do conjunto validado: ",
+    paste(invalid_vars, collapse = ", "), "."
+  )
+}
+
+if (!all(iv_vars %in% names(df_main))) {
+  absent_in_df <- setdiff(iv_vars, names(df_main))
+  stop(
+    "Checkpoint D1 FALHOU: variáveis IV ausentes em df_main: ",
+    paste(absent_in_df, collapse = ", "), "."
+  )
+}
+
+missing_required_now <- sum(!complete.cases(df_main[, required_validated]))
+if (missing_required_now > 0) {
+  stop(
+    "Checkpoint D1 FALHOU: novas perdas detectadas em variáveis obrigatórias (",
+    missing_required_now, " linhas incompletas)."
+  )
+}
+
+n_before_trend <- nrow(df_main)
+df_main <- df_main %>% mutate(year_trend = year_actual - min(year_actual, na.rm = TRUE))
+n_after_trend <- nrow(df_main)
+
+if (n_before_trend != n_after_trend) {
+  stop("Checkpoint D1 FALHOU: construção de year_trend alterou N.")
+}
+
+consistency_tbl <- tibble(
+  criterio = c(
+    "df_main igual ao N final da Fase 3B",
+    "variáveis IV pertencem ao conjunto validado",
+    "sem novas perdas de observação",
+    "year_trend consistente com Fase 3C sem alterar N"
+  ),
+  status = c("ok", "ok", "ok", "ok"),
+  detalhe = c(
+    paste0("N atual = ", nrow(df_main), " e N_validado_3B = ", n_final_3b),
+    paste0("Variáveis IV: ", paste(iv_vars, collapse = ", ")),
+    "Completeness mantida nas variáveis obrigatórias validadas.",
+    paste0("N antes trend = ", n_before_trend, "; N depois trend = ", n_after_trend)
+  )
+)
+
+write_csv(consistency_tbl, "outputs/lab07_phase3d_consistency_check.csv")
+cat("Checkpoint D1 OK: consistência com 3B/3C validada explicitamente.\n")
+```
+
+## Bloco D2 — Estimação IV principal com recuperação de estágios
+
+Especificação canônica:
+
+$$
+any\_prio_{it} = \beta_1 gdp\_g_{it} + \beta_2 gdp\_g\_l_{it} + X_{it}'\gamma + \lambda_i t + u_{it}
+$$
+
+com $(gdp\_g, gdp\_g\_l)$ endógenas instrumentadas por $(gpcp\_g, gpcp\_g\_l)$, tendência temporal específica por país via `ccode[year_trend]` e cluster por `ccode`.
+
+```{r bloco-d2-iv-main}
+mod_iv_main <- feols(
+  any_prio ~ y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend] |
+    gdp_g + gdp_g_l ~ gpcp_g + gpcp_g_l,
+  data = df_main,
+  vcov = ~ccode
+)
+
+iv_stage12 <- summary(mod_iv_main, stage = 1:2)
+if (length(iv_stage12) < 2) {
+  stop("Checkpoint D2 FALHOU: estágios do IV não recuperáveis com summary(stage = 1:2).")
+}
+
+iv_main_tidy <- tidy(mod_iv_main, conf.int = TRUE)
+write_csv(iv_main_tidy, "outputs/lab07_phase3d_iv_main_tidy.csv")
+
+capture.output(summary(mod_iv_main), file = "outputs/lab07_phase3d_iv_main_summary.txt")
+capture.output(summary(mod_iv_main, stage = 1:2), file = "outputs/lab07_phase3d_iv_stage12_summary.txt")
+
+etable_iv_stages <- etable(mod_iv_main, stage = 1:2, vcov = ~ccode)
+write.table(
+  etable_iv_stages,
+  file = "outputs/lab07_phase3d_iv_stage12_table.txt",
+  quote = FALSE,
+  sep = "\t",
+  row.names = TRUE,
+  col.names = NA
+)
+
+cat("Checkpoint D2 OK: IV principal estimado e estágios recuperados.\n")
+```
+
+## Bloco D3 — First stage com diagnóstico explícito (inclui F-stat)
+
+```{r bloco-d3-first-stage}
+first_stage_models <- summary(mod_iv_main, stage = 1)
+
+first_stage_tidy <- bind_rows(
+  lapply(seq_along(first_stage_models), function(i) {
+    eq_name <- names(first_stage_models)[i]
+    tidy(first_stage_models[[i]], conf.int = TRUE) %>%
+      mutate(first_stage_equation = eq_name, .before = 1)
+  })
+)
+write_csv(first_stage_tidy, "outputs/lab07_phase3d_first_stage_tidy.csv")
+
+capture.output(first_stage_models, file = "outputs/lab07_phase3d_first_stage_summary.txt")
+
+fs_fitstat <- fitstat(mod_iv_main, c("ivf", "ivf1", "ivf2"))
+first_stage_diag <- bind_rows(
+  lapply(names(fs_fitstat), function(nm) {
+    x <- fs_fitstat[[nm]]
+    tibble(
+      diagnostico = nm,
+      estatistica = x$stat,
+      p_value = x$p,
+      gl_num = x$df1,
+      gl_den = x$df2
+    )
+  })
+)
+write_csv(first_stage_diag, "outputs/lab07_phase3d_first_stage_diagnostics.csv")
+
+fs_ivf1 <- first_stage_diag %>% filter(str_detect(diagnostico, "^ivf1::"))
+fs_note <- c(
+  "Lab07 Fase 3D — Nota de first stage",
+  paste0("- F-stat first stage para gdp_g: ", round(fs_ivf1$estatistica[fs_ivf1$diagnostico == "ivf1::gdp_g"], 3),
+         " (p = ", signif(fs_ivf1$p_value[fs_ivf1$diagnostico == "ivf1::gdp_g"], 3), ")."),
+  paste0("- F-stat first stage para gdp_g_l: ", round(fs_ivf1$estatistica[fs_ivf1$diagnostico == "ivf1::gdp_g_l"], 3),
+         " (p = ", signif(fs_ivf1$p_value[fs_ivf1$diagnostico == "ivf1::gdp_g_l"], 3), ")."),
+  "- A regra de bolso F>10 é apenas referência inicial; aqui os valores sugerem força limitada/moderada em pelo menos parte dos estágios.",
+  "- Com múltiplas endógenas e múltiplos instrumentos, o diagnóstico deve ser lido por equação de first stage e em conjunto com hipóteses de exclusão."
+)
+writeLines(fs_note, "outputs/lab07_phase3d_first_stage_note.txt")
+
+if (nrow(fs_ivf1) < 2 || any(is.na(fs_ivf1$estatistica))) {
+  stop("Checkpoint D3 FALHOU: diagnóstico de first stage incompleto (F-stat ausente).")
+}
+
+cat("Checkpoint D3 OK: first stage e F-statísticas registradas explicitamente.\n")
+```
+
+## Bloco D4 — Reduced form principal
+
+A reduced form resume a relação total entre instrumentos e desfecho, mantendo a mesma estrutura de FE, tendência e cluster. Ela **não** é o second stage do IV.
+
+```{r bloco-d4-reduced-form}
+mod_rf_main <- feols(
+  any_prio ~ gpcp_g + gpcp_g_l + y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend],
+  data = df_main,
+  vcov = ~ccode
+)
+
+rf_tidy <- tidy(mod_rf_main, conf.int = TRUE)
+write_csv(rf_tidy, "outputs/lab07_phase3d_reduced_form_tidy.csv")
+capture.output(summary(mod_rf_main), file = "outputs/lab07_phase3d_reduced_form_summary.txt")
+
+cat("Checkpoint D4 OK: reduced form estimada e documentada.\n")
+```
+
+## Bloco D5 — Comparação OLS versus IV
+
+```{r bloco-d5-comparacao-modelos}
+mod_ols_simple <- feols(
+  any_prio ~ gdp_g + gdp_g_l,
+  data = df_main,
+  vcov = ~ccode
+)
+
+mod_ols_full <- feols(
+  any_prio ~ gdp_g + gdp_g_l + y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend],
+  data = df_main,
+  vcov = ~ccode
+)
+
+models_comp_tidy <- bind_rows(
+  tidy(mod_ols_simple, conf.int = TRUE) %>% mutate(modelo = "mod_ols_simple (benchmark associativo)", .before = 1),
+  tidy(mod_ols_full, conf.int = TRUE) %>% mutate(modelo = "mod_ols_full (benchmark associativo com controles)", .before = 1),
+  tidy(mod_rf_main, conf.int = TRUE) %>% mutate(modelo = "mod_rf_main (reduced form)", .before = 1),
+  tidy(mod_iv_main, conf.int = TRUE) %>% mutate(modelo = "mod_iv_main (second stage IV)", .before = 1)
+)
+write_csv(models_comp_tidy, "outputs/lab07_phase3d_models_comparison_tidy.csv")
+
+models_table <- etable(
+  mod_ols_simple,
+  mod_ols_full,
+  mod_rf_main,
+  mod_iv_main,
+  vcov = ~ccode,
+  headers = c(
+    "OLS simples (associativo)",
+    "OLS ampliado (associativo)",
+    "Reduced form",
+    "IV second stage"
+  )
+)
+
+write.table(
+  models_table,
+  file = "outputs/lab07_phase3d_models_comparison_table.txt",
+  quote = FALSE,
+  sep = "\t",
+  row.names = TRUE,
+  col.names = NA
+)
+
+if (!file_exists("outputs/lab07_phase3d_models_comparison_tidy.csv") ||
+    !file_exists("outputs/lab07_phase3d_models_comparison_table.txt")) {
+  stop("Checkpoint D5 FALHOU: comparação OLS vs IV não foi salva corretamente.")
+}
+
+cat("Checkpoint D5 OK: comparação OLS vs IV gerada em formatos legíveis.\n")
+```
+
+## Interpretação causal explícita (didática e curta)
+
+- No Lab07, os modelos OLS capturam **associação observada** entre crescimento e conflito, mesmo com controles e tendência por país.
+- Essa associação pode estar enviesada por endogeneidade: causalidade reversa (conflito afeta crescimento), variáveis omitidas e erro de mensuração.
+- O IV/2SLS usa apenas a variação do crescimento explicada pelos instrumentos climáticos (`gpcp_g`, `gpcp_g_l`) para identificar o efeito sobre `any_prio`.
+- A interpretação causal do IV depende de hipóteses substantivas: relevância dos instrumentos e restrição de exclusão.
+- A diferença entre OLS e IV deve ser lida como evidência sobre possível viés no OLS (mudança de sinal, magnitude ou precisão), mas **não** prova automaticamente validade causal plena.
+- Se o first stage é frágil, a inferência IV perde precisão e robustez interpretativa.
+
+## Bloco D6 — Atualização incremental obrigatória do README.md
+
+```{r bloco-d6-readme}
+readme_path <- "README.md"
+if (!file_exists(readme_path)) {
+  stop("Checkpoint D6 FALHOU: README.md ausente na raiz.")
+}
+
+readme_before <- readLines(readme_path, warn = FALSE)
+readme_after <- readme_before
+sections_changed <- c()
+
+# 1) Status
+if (any(str_detect(readme_after, "Fase 3C: concluída")) && !any(str_detect(readme_after, "Fase 3D:"))) {
+  idx <- which(str_detect(readme_after, "Fase 3C: concluída"))[1]
+  readme_after <- append(readme_after, "- Fase 3D: concluída.", after = idx)
+  sections_changed <- c(sections_changed, "Status do projeto")
+}
+
+# 2) Metodologia (se não existir, criar seção curta)
+if (!any(str_detect(readme_after, "## Metodologia"))) {
+  insert_after <- which(str_detect(readme_after, "## Para que serve"))
+  if (length(insert_after) > 0) {
+    pos <- max(which(str_detect(readme_after, "^## ") & seq_along(readme_after) > insert_after[1]))
+    if (is.na(pos)) pos <- length(readme_after)
+    metodologia_block <- c(
+      "",
+      "## Metodologia",
+      "- Benchmarks OLS foram implementados na Fase 3C (interpretação associativa).",
+      "- Na Fase 3D, foram implementados first stage, reduced form e IV/2SLS principal com `fixest`.",
+      "- A comparação OLS vs IV já foi produzida; robustez com `war_prio` permanece para a Fase 3E."
+    )
+    readme_after <- append(readme_after, metodologia_block, after = pos - 1)
+  } else {
+    readme_after <- c(readme_after,
+      "",
+      "## Metodologia",
+      "- Benchmarks OLS foram implementados na Fase 3C (interpretação associativa).",
+      "- Na Fase 3D, foram implementados first stage, reduced form e IV/2SLS principal com `fixest`.",
+      "- A comparação OLS vs IV já foi produzida; robustez com `war_prio` permanece para a Fase 3E."
+    )
+  }
+  sections_changed <- c(sections_changed, "Metodologia")
+}
+
+# 3) Como executar (fase atual)
+readme_after <- str_replace_all(
+  readme_after,
+  "docs/lab07_phase3c.Rmd",
+  "docs/lab07_phase3d.Rmd"
+)
+readme_after <- str_replace_all(
+  readme_after,
+  "R/lab07_phase3c_render.R",
+  "R/lab07_phase3d_render.R"
+)
+readme_after <- str_replace_all(
+  readme_after,
+  "docs/lab07_phase3c.html",
+  "docs/lab07_phase3d.html"
+)
+sections_changed <- unique(c(sections_changed, "Como usar / como executar"))
+
+# 4) Outputs principais
+if (!any(str_detect(readme_after, "lab07_phase3d_iv_main_tidy.csv"))) {
+  output_anchor <- which(str_detect(readme_after, "Outputs principais até a Fase 3C:"))
+  if (length(output_anchor) > 0) {
+    add_lines <- c(
+      "",
+      "Outputs centrais da Fase 3D:",
+      "- `outputs/lab07_phase3d_consistency_check.csv`",
+      "- `outputs/lab07_phase3d_first_stage_tidy.csv`",
+      "- `outputs/lab07_phase3d_first_stage_diagnostics.csv`",
+      "- `outputs/lab07_phase3d_reduced_form_tidy.csv`",
+      "- `outputs/lab07_phase3d_iv_main_tidy.csv`",
+      "- `outputs/lab07_phase3d_models_comparison_tidy.csv`",
+      "- `outputs/lab07_phase3d_models_comparison_table.txt`"
+    )
+    readme_after <- append(readme_after, add_lines, after = output_anchor)
+  }
+  sections_changed <- unique(c(sections_changed, "Principais arquivos e outputs"))
+}
+
+# 5) Documentação adicional (handoff 3D)
+if (!any(str_detect(readme_after, "lab07_phase3d_handoff_2026-03-27.md"))) {
+  handoff_anchor <- which(str_detect(readme_after, "Handoffs por fase:"))
+  if (length(handoff_anchor) > 0) {
+    insert_after <- max(which(seq_along(readme_after) > handoff_anchor[1] & str_detect(readme_after, "lab07_phase3c_handoff_2026-03-27.md")))
+    if (is.finite(insert_after)) {
+      readme_after <- append(readme_after, "- `docs/lab07_phase3d_handoff_2026-03-27.md`", after = insert_after)
+    }
+  }
+  sections_changed <- unique(c(sections_changed, "Documentação adicional"))
+}
+
+# 6) Histórico
+phase3d_history_entry <- "- 2026-03-27 — Fase 3D: validação de consistência com 3B/3C, estimação de first stage, reduced form e IV/2SLS principal, diagnóstico explícito de first stage (incluindo F-stat), comparação OLS vs IV e atualização incremental do README."
+
+if (!any(str_detect(readme_after, fixed(phase3d_history_entry)))) {
+  readme_after <- c(
+    readme_after,
+    phase3d_history_entry
+  )
+  sections_changed <- unique(c(sections_changed, "Histórico de atualizações"))
+}
+
+writeLines(readme_after, readme_path)
+
+if (identical(readme_before, readme_after)) {
+  sections_changed <- unique(c(sections_changed, "README mantido sem alterações necessárias"))
+}
+
+readme_log <- tibble(
+  acao_readme = "atualizado",
+  secoes_alteradas = paste(unique(sections_changed), collapse = "; ")
+)
+write_csv(readme_log, "outputs/lab07_phase3d_readme_update_log.csv")
+
+if (!file_exists("outputs/lab07_phase3d_readme_update_log.csv")) {
+  stop("Checkpoint D6 FALHOU: log da atualização do README não foi gerado.")
+}
+
+cat("Checkpoint D6 OK: README.md atualizado incrementalmente e logado.\n")
+```
+
+## Bloco D7 — Registro de ambiente e handoff da Fase 3D
+
+```{r bloco-d7-handoff}
+capture.output(sessionInfo(), file = "outputs/lab07_phase3d_session_info.txt")
+
+iv_collin <- mod_iv_main$collin.var
+collin_note <- if (length(iv_collin) > 0) {
+  paste0("Variáveis removidas por colinearidade no IV principal: ", paste(iv_collin, collapse = ", "), ".")
+} else {
+  "Nenhuma variável removida por colinearidade no IV principal."
+}
+
+fs_diag <- read_csv("outputs/lab07_phase3d_first_stage_diagnostics.csv", show_col_types = FALSE)
+readme_log <- read_csv("outputs/lab07_phase3d_readme_update_log.csv", show_col_types = FALSE)
+
+f_gdp_g <- fs_diag %>% filter(diagnostico == "ivf1::gdp_g")
+f_gdp_g_l <- fs_diag %>% filter(diagnostico == "ivf1::gdp_g_l")
+
+handoff_lines <- c(
+  "# Handoff — Fase 3D (Lab07)",
+  "",
+  "## 1) O que foi feito",
+  "",
+  "- Validação explícita de consistência com as Fases 3B e 3C.",
+  "- Estimação do IV principal (`mod_iv_main`) com recuperação de estágios.",
+  "- Estimação e documentação da reduced form principal (`mod_rf_main`).",
+  "- Geração de diagnóstico de first stage com F-stat explícita.",
+  "- Construção de comparação legível entre OLS, reduced form e IV.",
+  "- Atualização incremental e preservativa do `README.md`.",
+  "",
+  "## 2) O que foi validado",
+  "",
+  "- **Checkpoint D1:** consistência com amostra e convenções das Fases 3B/3C.",
+  "- **Checkpoint D2:** IV principal estimado sem erro e estágios recuperáveis.",
+  "- **Checkpoint D3:** first stage documentado com F-stat explícita.",
+  "- **Checkpoint D4:** reduced form estimada sem erro e registrada.",
+  "- **Checkpoint D5:** comparação OLS vs IV gerada em arquivos legíveis.",
+  "- **Checkpoint D6:** README.md atualizado e logado.",
+  "",
+  "## 3) Especificação IV efetivamente estimada",
+  "",
+  "- `any_prio ~ y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 | ccode[year_trend] | gdp_g + gdp_g_l ~ gpcp_g + gpcp_g_l`, com cluster por `ccode`.",
+  paste0("- ", collin_note),
+  "",
+  "## 4) Diagnósticos de first stage (F-stat)",
+  "",
+  paste0("- gdp_g: F = ", round(f_gdp_g$estatistica, 3), ", p = ", signif(f_gdp_g$p_value, 3), "."),
+  paste0("- gdp_g_l: F = ", round(f_gdp_g_l$estatistica, 3), ", p = ", signif(f_gdp_g_l$p_value, 3), "."),
+  "- Interpretação: regra de bolso F>10 não é critério mecânico; leitura conjunta com hipótese de exclusão permanece necessária.",
+  "",
+  "## 5) Interpretação causal",
+  "",
+  "- OLS foi mantido como benchmark associativo.",
+  "- IV foi interpretado como identificação via variação exógena induzida pelos instrumentos climáticos, condicional às hipóteses de relevância e exclusão.",
+  "- Diferenças OLS vs IV foram tratadas como indicativas de possível viés em OLS, sem sobre-alegação causal.",
+  "",
+  "## 6) Comparação OLS vs IV",
+  "",
+  "- Comparação construída com quatro modelos: `mod_ols_simple`, `mod_ols_full`, `mod_rf_main`, `mod_iv_main`.",
+  "- Arquivos: `outputs/lab07_phase3d_models_comparison_tidy.csv` e `outputs/lab07_phase3d_models_comparison_table.txt`.",
+  "",
+  "## 7) README.md",
+  "",
+  "- README foi atualizado (não recriado).",
+  paste0("- Seções alteradas: ", readme_log$secoes_alteradas[[1]], "."),
+  "",
+  "## 8) Arquivos e outputs gerados",
+  "",
+  "- `docs/lab07_phase3d.Rmd`",
+  "- `docs/lab07_phase3d.html`",
+  "- `outputs/lab07_phase3d_prerequisites_check.csv`",
+  "- `outputs/lab07_phase3d_consistency_check.csv`",
+  "- `outputs/lab07_phase3d_iv_main_tidy.csv`",
+  "- `outputs/lab07_phase3d_iv_main_summary.txt`",
+  "- `outputs/lab07_phase3d_iv_stage12_summary.txt`",
+  "- `outputs/lab07_phase3d_iv_stage12_table.txt`",
+  "- `outputs/lab07_phase3d_first_stage_tidy.csv`",
+  "- `outputs/lab07_phase3d_first_stage_summary.txt`",
+  "- `outputs/lab07_phase3d_first_stage_diagnostics.csv`",
+  "- `outputs/lab07_phase3d_first_stage_note.txt`",
+  "- `outputs/lab07_phase3d_reduced_form_tidy.csv`",
+  "- `outputs/lab07_phase3d_reduced_form_summary.txt`",
+  "- `outputs/lab07_phase3d_models_comparison_tidy.csv`",
+  "- `outputs/lab07_phase3d_models_comparison_table.txt`",
+  "- `outputs/lab07_phase3d_readme_update_log.csv`",
+  "- `outputs/lab07_phase3d_session_info.txt`",
+  "- `docs/lab07_phase3d_handoff_2026-03-27.md`",
+  "",
+  "## 9) Pendente para a Fase 3E",
+  "",
+  "- Robustez mínima com `war_prio`.",
+  "- Extensões narrow.",
+  "- Comparação final incorporando robustez.",
+  "- Encerramento integral do laboratório.",
+  "",
+  "Execução encerrada ao final da Fase 3D, sem avanço para a Fase 3E."
+)
+
+writeLines(handoff_lines, "docs/lab07_phase3d_handoff_2026-03-27.md")
+```

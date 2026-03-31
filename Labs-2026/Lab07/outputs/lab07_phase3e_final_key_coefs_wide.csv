@@ -1,0 +1,7 @@
+modelo,desfecho,tipo,gdp_g,gdp_g_l
+OLS simples (any_prio),any_prio,OLS,-0.309 (0.275),-0.073 (0.253)
+OLS ampliado (any_prio),any_prio,OLS,-0.174 (0.144),0.099 (0.168)
+IV second stage (any_prio),any_prio,IV,-1.151 (1.459),-2.619* (1.228)
+IV second stage (war_prio),war_prio,IV robustez,-1.375 (0.825),-0.692 (0.716)
+IV narrow (any_prio_nar),any_prio_nar,IV narrow,-0.822 (1.177),-2.383* (1.168)
+IV narrow (war_prio_nar),war_prio_nar,IV narrow,-0.889 (0.596),-0.274 (0.638)

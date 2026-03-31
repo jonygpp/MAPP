@@ -1,0 +1,17 @@
+output
+docs/lab07_mss2004_iv.Rmd
+outputs/lab07_variable_mapping.csv
+outputs/lab07_descriptive_stats.csv
+outputs/lab07_ols_simple_tidy.csv
+outputs/lab07_ols_full_tidy.csv
+outputs/lab07_reduced_form_tidy.csv
+outputs/lab07_iv_main_tidy.csv
+outputs/lab07_iv_stage12.txt
+outputs/lab07_iv_etable_stage12.txt
+outputs/lab07_iv_warprio_tidy.csv
+outputs/lab07_sample_note.csv
+outputs/lab07_file_existence_check.csv
+outputs/lab07_models_comparison.html
+outputs/lab07_models_comparison_tidy.csv
+outputs/lab07_narrow_availability.csv
+outputs/lab07_pedagogical_notes.txt

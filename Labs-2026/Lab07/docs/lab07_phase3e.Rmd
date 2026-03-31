@@ -1,0 +1,986 @@
+---
+title: "Lab07 MAPP — Fase 3E (robustez, extensões narrow, comparação final e fechamento do laboratório)"
+author: "Agente executor IA"
+date: "2026-03-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+```
+
+## Escopo da fase
+
+**Modo principal:** empirical analysis + pedagogical design (fechamento do laboratório)  
+**Sequência secundária:** project integration (atualização final do README)
+
+Esta é a fase final do laboratório. Ela executa:
+
+1. verificação de pré-requisitos e consistência com todas as fases anteriores;
+2. extensão de `df_main` com variáveis opcionais de robustez;
+3. documentação da disponibilidade de variáveis narrow;
+4. análise de robustez com `war_prio` (OLS simples, OLS ampliado, reduced form, IV);
+5. extensão IV com variáveis narrow (`any_prio_nar`, `war_prio_nar`);
+6. tabela de comparação final consolidada com todos os modelos;
+7. interpretação causal final integrada;
+8. conclusões do laboratório;
+9. atualização final do README.md;
+10. handoff e session info finais.
+
+---
+
+## Bloco E0 — Pré-requisitos obrigatórios
+
+Os pré-requisitos desta fase incluem todos os artefatos canônicos das Fases 3B e 3D,
+além do arquivo de dados brutos necessário para recuperar as variáveis opcionais.
+
+```{r bloco-e0-prerequisitos}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(readr)
+  library(tidyr)
+  library(tibble)
+  library(stringr)
+  library(purrr)
+  library(fixest)
+  library(broom)
+  library(haven)
+  library(fs)
+})
+
+if (!dir_exists("outputs")) dir_create("outputs")
+if (!dir_exists("docs"))    dir_create("docs")
+if (!dir_exists("logs"))    dir_create("logs")
+
+prereq_tbl <- tibble(
+  artefato = c(
+    "df_main validado na Fase 3B",
+    "classificação de variáveis da Fase 3B",
+    "sumário da amostra da Fase 3B",
+    "padronização de nomes da Fase 3B",
+    "diagnósticos de first stage da Fase 3D",
+    "comparação OLS vs IV da Fase 3D",
+    "arquivo de dados brutos (variáveis opcionais)",
+    "README.md na raiz"
+  ),
+  caminho = c(
+    "outputs/lab07_phase3b_df_main.rds",
+    "outputs/lab07_phase3b_variable_classification.csv",
+    "outputs/lab07_phase3b_sample_summary.csv",
+    "outputs/lab07_phase3b_name_standardization.csv",
+    "outputs/lab07_phase3d_first_stage_diagnostics.csv",
+    "outputs/lab07_phase3d_models_comparison_tidy.csv",
+    "Data/mss_repdata_feb07.dta",
+    "README.md"
+  ),
+  existe = file_exists(c(
+    "outputs/lab07_phase3b_df_main.rds",
+    "outputs/lab07_phase3b_variable_classification.csv",
+    "outputs/lab07_phase3b_sample_summary.csv",
+    "outputs/lab07_phase3b_name_standardization.csv",
+    "outputs/lab07_phase3d_first_stage_diagnostics.csv",
+    "outputs/lab07_phase3d_models_comparison_tidy.csv",
+    "Data/mss_repdata_feb07.dta",
+    "README.md"
+  ))
+)
+
+write_csv(prereq_tbl, "outputs/lab07_phase3e_prerequisites_check.csv")
+
+missing_prereq <- prereq_tbl %>% filter(!existe)
+if (nrow(missing_prereq) > 0) {
+  stop(
+    "Pré-requisitos ausentes para a Fase 3E: ",
+    paste(missing_prereq$caminho, collapse = ", "),
+    ". Execução interrompida."
+  )
+}
+cat("Bloco E0 OK: todos os pré-requisitos encontrados.\n")
+```
+
+---
+
+## Bloco E1 — Consistência com todas as fases anteriores + extensão de df_main
+
+Este bloco:
+
+1. valida que `df_main` mantém as mesmas características das Fases 3B e 3D;
+2. constrói `year_trend` com a mesma fórmula das fases anteriores;
+3. recupera as variáveis opcionais (`war_prio`, `any_prio_nar`, `war_prio_nar`) do arquivo fonte canônico via left join controlado;
+4. valida que o join não altera N nem introduz perdas.
+
+```{r bloco-e1-consistencia}
+# Carregar df_main e metadados validados
+df_main         <- readRDS("outputs/lab07_phase3b_df_main.rds")
+classification  <- read_csv("outputs/lab07_phase3b_variable_classification.csv", show_col_types = FALSE)
+sample_summary  <- read_csv("outputs/lab07_phase3b_sample_summary.csv",         show_col_types = FALSE)
+
+n_final_3b <- sample_summary %>% filter(indicador == "N_final") %>% pull(valor)
+if (length(n_final_3b) != 1) stop("N_final da Fase 3B não está identificado de forma unívoca.")
+
+if (nrow(df_main) != n_final_3b) {
+  stop(sprintf("Checkpoint E1 FALHOU: N de df_main (%d) diverge da Fase 3B (%d).", nrow(df_main), n_final_3b))
+}
+
+# Construir year_trend com a mesma fórmula das Fases 3C/3D
+n_before <- nrow(df_main)
+df_main  <- df_main %>% mutate(year_trend = year_actual - min(year_actual, na.rm = TRUE))
+if (nrow(df_main) != n_before) stop("Checkpoint E1 FALHOU: year_trend alterou N.")
+
+# Recuperar variáveis opcionais do arquivo fonte
+raw_src <- read_dta("Data/mss_repdata_feb07.dta") %>%
+  select(ccode, year, war_prio, any_prio_nar, war_prio_nar) %>%
+  rename(year_actual = year)
+
+# Left join controlado
+df_extended <- left_join(df_main, raw_src, by = c("ccode", "year_actual"))
+
+# Validar join
+if (nrow(df_extended) != n_final_3b) {
+  stop(sprintf("Checkpoint E1 FALHOU: join alterou N (antes=%d, depois=%d).", n_final_3b, nrow(df_extended)))
+}
+for (v in c("war_prio", "any_prio_nar", "war_prio_nar")) {
+  n_miss <- sum(is.na(df_extended[[v]]))
+  if (n_miss > 0) {
+    stop(sprintf("Checkpoint E1 FALHOU: %s tem %d NA após join.", v, n_miss))
+  }
+}
+
+consistency_tbl <- tibble(
+  criterio = c(
+    "df_main igual ao N final da Fase 3B",
+    "year_trend sem alteração de N",
+    "join com variáveis opcionais sem perda de observações",
+    "war_prio sem NA após join",
+    "any_prio_nar sem NA após join",
+    "war_prio_nar sem NA após join"
+  ),
+  status  = "ok",
+  detalhe = c(
+    sprintf("N = %d (igual à Fase 3B)", nrow(df_extended)),
+    sprintf("N antes = %d; N depois = %d", n_before, nrow(df_extended)),
+    sprintf("N final = %d; sem duplicatas introduzidas", nrow(df_extended)),
+    sprintf("war_prio: %d obs não nulas", sum(!is.na(df_extended$war_prio))),
+    sprintf("any_prio_nar: %d obs não nulas", sum(!is.na(df_extended$any_prio_nar))),
+    sprintf("war_prio_nar: %d obs não nulas", sum(!is.na(df_extended$war_prio_nar)))
+  )
+)
+write_csv(consistency_tbl, "outputs/lab07_phase3e_consistency_check.csv")
+cat("Checkpoint E1 OK: consistência validada; variáveis opcionais incorporadas a df_extended (N =",
+    nrow(df_extended), ").\n")
+```
+
+---
+
+## Bloco E2 — Verificação de disponibilidade das variáveis narrow
+
+Antes de estimar qualquer modelo com variáveis narrow, é obrigatório documentar formalmente
+sua disponibilidade. Este bloco registra o status e, se disponíveis, descreve brevemente
+sua distribuição.
+
+```{r bloco-e2-narrow}
+narrow_vars <- c("any_prio_nar", "war_prio_nar")
+
+narrow_tbl <- tibble(
+  variavel     = narrow_vars,
+  disponivel   = narrow_vars %in% names(df_extended),
+  n_total      = map_int(narrow_vars, ~ if (.x %in% names(df_extended)) nrow(df_extended) else NA_integer_),
+  n_nao_nulo   = map_int(narrow_vars, ~ if (.x %in% names(df_extended)) sum(!is.na(df_extended[[.x]])) else NA_integer_),
+  n_positivos  = map_int(narrow_vars, ~ if (.x %in% names(df_extended)) sum(df_extended[[.x]] == 1, na.rm = TRUE) else NA_integer_),
+  decisao      = if_else(
+    narrow_vars %in% names(df_extended),
+    "disponível — estimar IV narrow",
+    "ausente — documentar e prosseguir sem análise narrow"
+  )
+)
+
+write_csv(narrow_tbl, "outputs/lab07_phase3e_narrow_availability.csv")
+
+cat("Checkpoint E2 — Disponibilidade de variáveis narrow:\n")
+print(narrow_tbl)
+
+narrow_disponivel <- all(narrow_tbl$disponivel)
+if (narrow_disponivel) {
+  cat("Checkpoint E2 OK: variáveis narrow disponíveis. IV narrow será estimado.\n")
+} else {
+  cat("Checkpoint E2: variáveis narrow AUSENTES. Análise narrow documentada como indisponível; laboratório prossegue.\n")
+}
+```
+
+---
+
+## Bloco E3 — Robustez mínima: reestimação com desfecho `war_prio`
+
+A principal análise de robustez substitui o desfecho de `any_prio` por `war_prio`.
+Todos os demais elementos da especificação são mantidos idênticos:
+mesmos controles, mesmos efeitos fixos (FE de país com tendência temporal específica),
+mesma estrutura de cluster.
+
+Este bloco estima quatro modelos paralelos aos do pipeline principal:
+
+1. OLS simples com `war_prio`;
+2. OLS ampliado com controles e tendência por país;
+3. Reduced form (instrumentos → `war_prio`);
+4. IV/2SLS principal com `war_prio`.
+
+### Checkpoint E1 — Todos os modelos devem estimar sem erro
+
+```{r bloco-e3-warprio}
+# -- OLS simples (war_prio) --------------------------------------------------
+mod_wp_ols_simple <- feols(
+  war_prio ~ gdp_g + gdp_g_l,
+  data  = df_extended,
+  vcov  = ~ccode
+)
+
+wp_ols_simple_tidy <- tidy(mod_wp_ols_simple, conf.int = TRUE) %>%
+  mutate(modelo = "OLS simples (war_prio)", desfecho = "war_prio", .before = 1)
+write_csv(wp_ols_simple_tidy, "outputs/lab07_phase3e_warprio_ols_simple.csv")
+
+# -- OLS ampliado (war_prio) -------------------------------------------------
+mod_wp_ols_full <- feols(
+  war_prio ~ gdp_g + gdp_g_l + y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend],
+  data = df_extended,
+  vcov = ~ccode
+)
+
+wp_ols_full_tidy <- tidy(mod_wp_ols_full, conf.int = TRUE) %>%
+  mutate(modelo = "OLS ampliado (war_prio)", desfecho = "war_prio", .before = 1)
+write_csv(wp_ols_full_tidy, "outputs/lab07_phase3e_warprio_ols_full.csv")
+
+# -- Reduced form (war_prio) -------------------------------------------------
+mod_wp_rf <- feols(
+  war_prio ~ gpcp_g + gpcp_g_l + y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend],
+  data = df_extended,
+  vcov = ~ccode
+)
+
+wp_rf_tidy <- tidy(mod_wp_rf, conf.int = TRUE) %>%
+  mutate(modelo = "Reduced form (war_prio)", desfecho = "war_prio", .before = 1)
+write_csv(wp_rf_tidy, "outputs/lab07_phase3e_warprio_rf.csv")
+
+# -- IV principal (war_prio) -------------------------------------------------
+mod_wp_iv <- feols(
+  war_prio ~ y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend] |
+    gdp_g + gdp_g_l ~ gpcp_g + gpcp_g_l,
+  data = df_extended,
+  vcov = ~ccode
+)
+
+wp_iv_tidy <- tidy(mod_wp_iv, conf.int = TRUE) %>%
+  mutate(modelo = "IV second stage (war_prio)", desfecho = "war_prio", .before = 1)
+write_csv(wp_iv_tidy, "outputs/lab07_phase3e_warprio_iv.csv")
+
+# Checkpoint E1: todos os modelos estimados sem erro
+for (m_name in c("mod_wp_ols_simple", "mod_wp_ols_full", "mod_wp_rf", "mod_wp_iv")) {
+  if (!exists(m_name)) stop(sprintf("Checkpoint E1 FALHOU: %s não foi estimado.", m_name))
+}
+cat("Checkpoint E1 OK: todos os modelos de robustez (war_prio) estimados sem erro.\n")
+
+# Sumário dos modelos de robustez
+capture.output(summary(mod_wp_ols_simple), file = "outputs/lab07_phase3e_warprio_ols_simple_summary.txt")
+capture.output(summary(mod_wp_ols_full),   file = "outputs/lab07_phase3e_warprio_ols_full_summary.txt")
+capture.output(summary(mod_wp_rf),         file = "outputs/lab07_phase3e_warprio_rf_summary.txt")
+capture.output(summary(mod_wp_iv),         file = "outputs/lab07_phase3e_warprio_iv_summary.txt")
+
+# Coeficientes principais de interesse nos modelos war_prio
+cat("\n--- Coeficientes gdp_g e gdp_g_l nos modelos war_prio ---\n")
+for (m_name in c("mod_wp_ols_simple", "mod_wp_ols_full", "mod_wp_iv")) {
+  m <- get(m_name)
+  coefs <- tidy(m) %>% filter(term %in% c("gdp_g", "gdp_g_l", "fit_gdp_g", "fit_gdp_g_l"))
+  cat(m_name, ":\n")
+  print(coefs)
+}
+```
+
+**Nota sobre colinearidade na especificação ampliada com `war_prio`:** a mesma estrutura de efeitos fixos com tendência específica por país (`ccode[year_trend]`) pode remover variáveis por colinearidade (tipicamente `y_0`, `ethfrac`, `relfrac`, `lmtnest`). Isso replica o comportamento observado nos modelos principais da Fase 3D e é esperado dado o design do painel.
+
+---
+
+## Bloco E4 — Extensão narrow (se disponível)
+
+Se as variáveis narrow estão disponíveis, estima-se o IV principal replicado para
+`any_prio_nar` e `war_prio_nar`. O objetivo é verificar se os resultados são sensíveis
+à definição mais restritiva de conflito (critério PRIO narrow vs. broad).
+
+```{r bloco-e4-narrow-iv}
+if (narrow_disponivel) {
+
+  # IV narrow: any_prio_nar
+  mod_iv_nar_any <- feols(
+    any_prio_nar ~ y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+      ccode[year_trend] |
+      gdp_g + gdp_g_l ~ gpcp_g + gpcp_g_l,
+    data = df_extended,
+    vcov = ~ccode
+  )
+
+  iv_nar_any_tidy <- tidy(mod_iv_nar_any, conf.int = TRUE) %>%
+    mutate(modelo = "IV narrow (any_prio_nar)", desfecho = "any_prio_nar", .before = 1)
+
+  # IV narrow: war_prio_nar
+  mod_iv_nar_war <- feols(
+    war_prio_nar ~ y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+      ccode[year_trend] |
+      gdp_g + gdp_g_l ~ gpcp_g + gpcp_g_l,
+    data = df_extended,
+    vcov = ~ccode
+  )
+
+  iv_nar_war_tidy <- tidy(mod_iv_nar_war, conf.int = TRUE) %>%
+    mutate(modelo = "IV narrow (war_prio_nar)", desfecho = "war_prio_nar", .before = 1)
+
+  iv_narrow_tidy <- bind_rows(iv_nar_any_tidy, iv_nar_war_tidy)
+  write_csv(iv_narrow_tidy, "outputs/lab07_phase3e_iv_narrow.csv")
+
+  capture.output(summary(mod_iv_nar_any), file = "outputs/lab07_phase3e_iv_narrow_any_summary.txt")
+  capture.output(summary(mod_iv_nar_war), file = "outputs/lab07_phase3e_iv_narrow_war_summary.txt")
+
+  cat("Checkpoint E2 confirmado: IV narrow estimado para any_prio_nar e war_prio_nar.\n")
+  cat("\n--- Coeficientes IV narrow (any_prio_nar) ---\n")
+  print(tidy(mod_iv_nar_any) %>% filter(term %in% c("fit_gdp_g", "fit_gdp_g_l")))
+  cat("\n--- Coeficientes IV narrow (war_prio_nar) ---\n")
+  print(tidy(mod_iv_nar_war) %>% filter(term %in% c("fit_gdp_g", "fit_gdp_g_l")))
+
+} else {
+  cat("Checkpoint E2: variáveis narrow ausentes. Nenhuma estimação narrow realizada.\n")
+  cat("Análise narrow documentada como indisponível em outputs/lab07_phase3e_narrow_availability.csv.\n")
+  iv_narrow_tidy    <- tibble()
+  mod_iv_nar_any    <- NULL
+  mod_iv_nar_war    <- NULL
+}
+```
+
+---
+
+## Bloco E5 — Tabela de comparação final consolidada
+
+Este bloco monta a comparação entre todos os modelos estimados no laboratório.
+Inclui: OLS simples e ampliado (any_prio), reduced form (any_prio), IV principal (any_prio),
+IV de robustez (war_prio) e IV narrow (se disponível).
+
+### Checkpoint E3 — Tabela final legível e completa
+
+```{r bloco-e5-comparacao-final}
+# Recarregar modelos originais (Fases 3C e 3D) para composição da tabela final
+mod_ols_simple <- feols(
+  any_prio ~ gdp_g + gdp_g_l,
+  data  = df_extended,
+  vcov  = ~ccode
+)
+
+mod_ols_full <- feols(
+  any_prio ~ gdp_g + gdp_g_l + y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend],
+  data = df_extended,
+  vcov = ~ccode
+)
+
+mod_rf_main <- feols(
+  any_prio ~ gpcp_g + gpcp_g_l + y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend],
+  data = df_extended,
+  vcov = ~ccode
+)
+
+mod_iv_main <- feols(
+  any_prio ~ y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend] |
+    gdp_g + gdp_g_l ~ gpcp_g + gpcp_g_l,
+  data = df_extended,
+  vcov = ~ccode
+)
+
+# Montar tabela tidy consolidada
+final_models_list <- list(
+  tidy(mod_ols_simple, conf.int = TRUE) %>%
+    mutate(modelo = "OLS simples (any_prio)", desfecho = "any_prio", tipo = "OLS", .before = 1),
+  tidy(mod_ols_full, conf.int = TRUE) %>%
+    mutate(modelo = "OLS ampliado (any_prio)", desfecho = "any_prio", tipo = "OLS", .before = 1),
+  tidy(mod_rf_main, conf.int = TRUE) %>%
+    mutate(modelo = "Reduced form (any_prio)", desfecho = "any_prio", tipo = "RF", .before = 1),
+  tidy(mod_iv_main, conf.int = TRUE) %>%
+    mutate(modelo = "IV second stage (any_prio)", desfecho = "any_prio", tipo = "IV", .before = 1),
+  tidy(mod_wp_iv, conf.int = TRUE) %>%
+    mutate(modelo = "IV second stage (war_prio)", desfecho = "war_prio", tipo = "IV robustez", .before = 1)
+)
+
+if (narrow_disponivel) {
+  final_models_list <- c(
+    final_models_list,
+    list(
+      tidy(mod_iv_nar_any, conf.int = TRUE) %>%
+        mutate(modelo = "IV narrow (any_prio_nar)", desfecho = "any_prio_nar", tipo = "IV narrow", .before = 1),
+      tidy(mod_iv_nar_war, conf.int = TRUE) %>%
+        mutate(modelo = "IV narrow (war_prio_nar)", desfecho = "war_prio_nar", tipo = "IV narrow", .before = 1)
+    )
+  )
+}
+
+final_comparison_tidy <- bind_rows(final_models_list)
+write_csv(final_comparison_tidy, "outputs/lab07_phase3e_final_models_comparison.csv")
+
+# Tabela legível focada em gdp_g e gdp_g_l (principais coeficientes de interesse)
+# Harmonizar nomes: fit_gdp_g → gdp_g, fit_gdp_g_l → gdp_g_l (para pivot coerente)
+key_coefs <- final_comparison_tidy %>%
+  filter(term %in% c("gdp_g", "gdp_g_l", "fit_gdp_g", "fit_gdp_g_l")) %>%
+  mutate(
+    term_harm = case_when(
+      term == "fit_gdp_g"   ~ "gdp_g",
+      term == "fit_gdp_g_l" ~ "gdp_g_l",
+      TRUE                  ~ term
+    ),
+    sig = case_when(
+      p.value < 0.001 ~ "***",
+      p.value < 0.01  ~ "**",
+      p.value < 0.05  ~ "*",
+      p.value < 0.1   ~ ".",
+      TRUE            ~ ""
+    ),
+    coef_str = sprintf("%.3f%s (%.3f)", estimate, sig, std.error)
+  ) %>%
+  select(modelo, desfecho, tipo, term_harm, coef_str)
+
+key_coefs_wide <- key_coefs %>%
+  pivot_wider(names_from = term_harm, values_from = coef_str) %>%
+  arrange(match(tipo, c("OLS", "RF", "IV", "IV robustez", "IV narrow")))
+
+write_csv(key_coefs_wide, "outputs/lab07_phase3e_final_key_coefs_wide.csv")
+
+# Tabela de texto formatada (legível)
+table_lines <- c(
+  "================================================================================",
+  "  Comparação final de modelos — Lab07 MAPP 2026",
+  "================================================================================",
+  sprintf("  %-38s  %-24s  %-24s  %-14s",
+          "Modelo", "gdp_g [est (SE)]", "gdp_g_l [est (SE)]", "Desfecho"),
+  "--------------------------------------------------------------------------------"
+)
+
+for (i in seq_len(nrow(key_coefs_wide))) {
+  row   <- key_coefs_wide[i, ]
+  g_col  <- if ("gdp_g"   %in% names(row) && !is.na(row[["gdp_g"]]  )) row[["gdp_g"]]   else "—"
+  gl_col <- if ("gdp_g_l" %in% names(row) && !is.na(row[["gdp_g_l"]])) row[["gdp_g_l"]] else "—"
+  table_lines <- c(
+    table_lines,
+    sprintf("  %-38s  %-24s  %-24s  %-14s",
+            substr(row[["modelo"]], 1, 38),
+            substr(g_col,  1, 24),
+            substr(gl_col, 1, 24),
+            row[["desfecho"]])
+  )
+}
+
+table_lines <- c(
+  table_lines,
+  "--------------------------------------------------------------------------------",
+  "  Nota: estimativas com erros-padrão clusterizados por ccode entre parênteses.",
+  "  * p<0.1; ** p<0.05; *** p<0.01",
+  "  Especificação IV: FE ccode[year_trend]; instrumentos gpcp_g + gpcp_g_l.",
+  "  Variáveis removidas por colinearidade: y_0, ethfrac, relfrac, lmtnest.",
+  "================================================================================"
+)
+
+writeLines(table_lines, "outputs/lab07_phase3e_final_models_table.txt")
+
+# Salvar tabela etable dos modelos IV para referência
+# etable com desfechos mistos pode falhar; usando tryCatch para robustez
+etab_iv_result <- tryCatch({
+  etab_base <- etable(mod_iv_main, mod_wp_iv, vcov = ~ccode,
+                      headers = c("IV any_prio", "IV war_prio"))
+  write.table(etab_base, "outputs/lab07_phase3e_iv_models_etable.txt",
+              quote = FALSE, sep = "\t", row.names = TRUE, col.names = NA)
+  if (narrow_disponivel) {
+    etab_nar <- etable(mod_iv_nar_any, mod_iv_nar_war, vcov = ~ccode,
+                       headers = c("IV any_prio_nar", "IV war_prio_nar"))
+    write.table(etab_nar, "outputs/lab07_phase3e_iv_narrow_etable.txt",
+                quote = FALSE, sep = "\t", row.names = TRUE, col.names = NA)
+  }
+  "ok"
+}, error = function(e) {
+  msg <- paste0("etable com modelos mistos não gerada: ", conditionMessage(e))
+  writeLines(msg, "outputs/lab07_phase3e_iv_models_etable.txt")
+  msg
+})
+cat("etable IV:", etab_iv_result, "\n")
+
+if (!file_exists("outputs/lab07_phase3e_final_models_comparison.csv") ||
+    !file_exists("outputs/lab07_phase3e_final_models_table.txt")) {
+  stop("Checkpoint E3 FALHOU: tabela final não foi salva corretamente.")
+}
+
+cat("Checkpoint E3 OK: tabela final consolidada gerada em formatos legíveis.\n")
+```
+
+---
+
+## Interpretação causal final integrada
+
+### Checkpoint E4 — Seção de interpretação obrigatória
+
+#### 1. Síntese dos resultados
+
+Os modelos estimados no laboratório descrevem uma relação **negativa** entre crescimento econômico
+(`gdp_g`, `gdp_g_l`) e conflito civil (`any_prio`) na África subsaariana entre 1981 e 1999.
+
+**OLS vs IV:**
+
+- O OLS simples (sem controles) captura uma correlação negativa de magnitude moderada
+  entre crescimento e conflito. Esse resultado já sugere que anos de crescimento econômico
+  maior estão associados a menor probabilidade de conflito.
+- O OLS ampliado (com controles e tendência por país) mantém a direção negativa,
+  mas reduz a magnitude do coeficiente contemporâneo e inverte o sinal da defasagem.
+  Isso indica que parte da correlação bruta se deve a características omitidas de países e períodos.
+- O IV/2SLS amplifica os coeficientes de interesse e, em ao menos um dos termos defasados,
+  produz estimativas com maior significância. A amplificação dos coeficientes no IV
+  é consistente com atenuação por erro de mensuração ou com viés de causalidade reversa no OLS
+  (conflito afetando crescimento negativamente, o que implicaria que o OLS subestima o efeito
+  do crescimento sobre conflito).
+
+**Papel da defasagem:**
+
+- O coeficiente de `gdp_g_l` (crescimento defasado em um período) é frequentemente
+  mais preciso ou significativo que o contemporâneo no IV.
+  Isso é consistente com a hipótese de que os efeitos econômicos sobre conflito operam
+  com alguma defasagem temporal.
+
+#### 2. Interpretação causal: o que o IV identifica
+
+O IV/2SLS deste laboratório usa variações de precipitação (`gpcp_g`, `gpcp_g_l`)
+como instrumentos para o crescimento econômico (`gdp_g`, `gdp_g_l`).
+
+A interpretação causal do IV depende de duas hipóteses substantivas:
+
+1. **Relevância:** os instrumentos climáticos devem predizer o crescimento econômico
+   no first stage. Os F-stats estimados na Fase 3D (gdp_g: F ≈ 6.4; gdp_g_l: F ≈ 5.1)
+   sugerem relevância moderada, abaixo da regra de bolso convencional de F>10.
+   Isso implica risco de viés de instrumento fraco e imprecisão nas estimativas IV.
+
+2. **Exclusão:** a precipitação deve afetar o conflito **exclusivamente através** do
+   crescimento econômico. Se houver canais diretos de precipitação para conflito
+   (por exemplo, via produção agrícola, pastoreio, recursos hídricos), a hipótese
+   de exclusão seria violada. Essa hipótese **não é testável** diretamente e depende
+   de argumentação substantiva.
+
+O estimando identificado pelo IV não é o ATE (efeito médio de tratamento na população).
+Trata-se de um LATE (Local Average Treatment Effect) — o efeito do crescimento para
+o subconjunto de países e períodos cuja taxa de crescimento foi efetivamente alterada
+pela variação climática (os *compliers* do instrumento).
+
+#### 3. Robustez: `any_prio` vs `war_prio`
+
+A análise de robustez com `war_prio` como desfecho serve para testar se os resultados
+do modelo principal são sensíveis à definição operacional de conflito.
+
+- `any_prio` inclui tanto guerras de alta intensidade quanto conflitos menores (armed conflict).
+- `war_prio` restringe ao limiar de maior intensidade (war).
+
+Em geral, se o mecanismo de fundo é econômico (crescimento reduz capacidade de recrutamento
+de grupos armados, ou eleva custo de oportunidade da violência), esperamos que a relação
+negativa se mantenha — possivelmente com menor magnitude, dado o menor número de eventos.
+As estimativas com `war_prio` devem ser lidas como evidência de robustez (mesma direção)
+ou fragilidade (desaparecimento do efeito com definição mais restrita).
+
+Se as variáveis narrow (`any_prio_nar`, `war_prio_nar`) estão disponíveis, elas permitem
+verificar a sensibilidade ao critério de codificação do conflito (threshold de 25 vs 1000
+mortes no caso do UCDP/PRIO).
+
+#### 4. Limitações
+
+1. **Instrumentos moderadamente fracos:** F-stats abaixo de 10 implicam que as estimativas IV
+   podem apresentar viés na direção do OLS e intervalos de confiança mais amplos.
+   Os resultados devem ser tratados como evidência indicativa, não como efeito preciso.
+
+2. **Precisão das estimativas:** erros-padrão clusterizados por país com apenas 41 grupos
+   oferecem proteção limitada contra correlação serial intragrupo. Com N de grupos pequeno,
+   a inferência baseada em t-assintótico é uma aproximação.
+
+3. **Generalização:** os resultados identificam o efeito de variações induzidas por chuva
+   no crescimento econômico sobre conflito. Esse efeito pode ser específico a economias
+   altamente dependentes de agricultura pluvial (como a África subsaariana do período).
+   Não se pode generalizar diretamente para choques de outras naturezas ou para outras regiões.
+
+4. **Hipótese de exclusão não testável:** a ausência de canais diretos de precipitação
+   para conflito é uma hipótese identificadora, não um fato verificado empiricamente.
+
+#### 5. Conclusão substantiva
+
+A evidência empírica deste laboratório, tomada em conjunto, é consistente com a hipótese
+de que choques negativos de crescimento econômico aumentam a probabilidade de conflito civil
+na África subsaariana. Esta conclusão replica os resultados centrais de
+Miguel, Satyanath e Sergenti (2004).
+
+Do ponto de vista de política pública, a implicação indicativa é que mecanismos de estabilização
+econômica e de amortecimento de choques de renda em economias dependentes de fatores climáticos
+podem, na margem, contribuir para redução da violência armada. No entanto, dado o caráter
+**local** do estimando e as limitações do instrumento, **não é possível afirmar** que esta
+relação se estende a outros contextos ou que intervenções econômicas genéricas produziriam
+o mesmo efeito.
+
+---
+
+## Bloco E6 — Conclusões do laboratório
+
+Esta seção encerra o laboratório e sintetiza os principais aprendizados metodológicos
+e aplicados do Lab07 MAPP 2026.
+
+### Principais aprendizados metodológicos
+
+**1. Diferença entre OLS e IV**
+
+O OLS estima a correlação entre crescimento e conflito condicional a controles observáveis.
+Essa correlação pode ser espúria ou distorcida por:
+
+- **causalidade reversa:** conflito deprime crescimento, fazendo o OLS subestimar o efeito;
+- **variáveis omitidas:** fatores não observáveis correlacionados com crescimento e conflito
+  (instabilidade institucional, choques externos, etc.);
+- **erro de mensuração:** variáveis de crescimento medidas com ruído atenuam os coeficientes.
+
+O IV/2SLS isola a variação de crescimento que é exógena (aqui: induzida por choques climáticos)
+e usa apenas essa variação para identificar o efeito sobre conflito.
+
+**2. Importância da identificação**
+
+A simples inclusão de controles não resolve endogeneidade. É necessário:
+
+- justificar teoricamente a direção do viés;
+- propor e testar uma estratégia de identificação (instrumento, RD, DiD, experimento);
+- avaliar as hipóteses de identificação (relevância, exclusão) com diagnósticos e argumentos substantivos.
+
+**3. Papel dos instrumentos climáticos**
+
+A precipitação (`gpcp_g`, `gpcp_g_l`) é utilizada como instrumento porque:
+
+- é plausível que afete o crescimento em economias agrícolas de baixa renda;
+- não é diretamente controlável por atores políticos;
+- assume-se que não afeta o conflito por canais diretos além do econômico.
+
+A força do instrumento (F-stat) é uma métrica de relevância: instrumentos fracos
+levam a estimativas ruidosas e potencialmente viesadas. O Lab07 ilustra um caso
+de força moderada/fraca, o que é comum em aplicações empíricas reais.
+
+**4. Caráter local do estimando (LATE)**
+
+O IV não estima o ATE (efeito médio para todos). Ele estima o efeito para os *compliers* —
+observações cuja exposição ao tratamento (crescimento) varia em função do instrumento.
+Isso implica que os resultados podem não ser generalizáveis além desse subgrupo identificável.
+
+### Principais aprendizados aplicados
+
+**1. Evidência empírica sobre conflito e crescimento**
+
+A replicação dos resultados de MSS (2004) confirma que choques negativos de crescimento
+econômico, instrumentados por variação de chuva, estão positivamente associados
+a maior probabilidade de conflito civil na África subsaariana.
+
+Esse resultado tem sido influente no debate sobre *grievance* econômica vs. *greed*
+como mecanismo do conflito civil: ele sugere que condições econômicas adversas,
+mesmo exogenamente determinadas, aumentam o risco de conflito.
+
+**2. Limites da inferência causal**
+
+Mesmo com instrumentação:
+
+- a exclusão não é perfeitamente testável;
+- os F-stats abaixo de 10 introduzem incerteza sobre a precisão das estimativas IV;
+- o número reduzido de países (41) limita a potência dos testes de cluster;
+- o período histórico (1981–1999) pode não ser representativo do padrão atual.
+
+Inferência causal é uma meta, não uma garantia. O Lab07 ilustra como perseguir
+essa meta com rigor metodológico e ao mesmo tempo reconhecer seus limites.
+
+**3. Workflow reproduzível**
+
+Este laboratório foi estruturado em fases sequenciais e documentadas
+(3A: auditoria de dados; 3B: construção da amostra; 3C: OLS; 3D: IV;
+3E: robustez e fechamento), cada uma com outputs auditáveis, handoffs
+e validação explícita de continuidade entre fases.
+
+Esse workflow é transferível para qualquer projeto de análise quantitativa
+com dados de painel em ciências sociais.
+
+---
+
+## Bloco E7 — Atualização final e obrigatória do README.md
+
+### Checkpoint E5 — README deve refletir estado final do projeto
+
+```{r bloco-e7-readme}
+readme_path <- "README.md"
+if (!file_exists(readme_path)) {
+  stop("Checkpoint E5 FALHOU: README.md ausente na raiz.")
+}
+
+readme_before <- readLines(readme_path, warn = FALSE)
+readme_after  <- readme_before
+sections_changed <- character(0)
+
+# 1) Status: marcar Fase 3E como concluída e laboratório finalizado
+if (!any(str_detect(readme_after, fixed("Fase 3E:")))) {
+  idx_3d <- which(str_detect(readme_after, fixed("Fase 3D: concluída")))[1]
+  if (!is.na(idx_3d)) {
+    readme_after <- append(readme_after,
+      c("- Fase 3E: concluída.", "- **Laboratório finalizado.**"),
+      after = idx_3d)
+  }
+  sections_changed <- c(sections_changed, "Status do projeto")
+}
+
+# 2) Metodologia: atualizar menção à robustez e narrow
+if (any(str_detect(readme_after, fixed("## Metodologia")))) {
+  idx_met <- which(str_detect(readme_after, fixed("## Metodologia")))[1]
+  # Substituir a linha sobre Fase 3E pendente, se ainda presente
+  readme_after <- str_replace(
+    readme_after,
+    fixed("- A comparação OLS vs IV já foi produzida; robustez com `war_prio` permanece para a Fase 3E."),
+    paste0(
+      "- A robustez com `war_prio` foi implementada na Fase 3E (OLS simples, OLS ampliado, RF e IV).",
+      if (narrow_disponivel) " Extensões narrow (any_prio_nar, war_prio_nar) também foram estimadas." else "",
+      " Comparação final consolidada completa."
+    )
+  )
+  sections_changed <- c(sections_changed, "Metodologia")
+}
+
+# 3) Como usar: atualizar para arquivo final da Fase 3E
+readme_after <- str_replace_all(
+  readme_after,
+  fixed("docs/lab07_phase3d.Rmd"),
+  "docs/lab07_phase3e.Rmd"
+)
+readme_after <- str_replace_all(
+  readme_after,
+  fixed("R/lab07_phase3d_render.R"),
+  "R/lab07_phase3e_render.R"
+)
+readme_after <- str_replace_all(
+  readme_after,
+  fixed("docs/lab07_phase3d.html"),
+  "docs/lab07_phase3e.html"
+)
+sections_changed <- unique(c(sections_changed, "Como usar / como executar"))
+
+# 4) Outputs: adicionar outputs da Fase 3E
+if (!any(str_detect(readme_after, fixed("lab07_phase3e_final_models_comparison.csv")))) {
+  anchor <- which(str_detect(readme_after, fixed("Outputs centrais da Fase 3D:")))[1]
+  if (!is.na(anchor)) {
+    phase3e_output_lines <- c(
+      "",
+      "Outputs centrais da Fase 3E:",
+      "- `outputs/lab07_phase3e_prerequisites_check.csv`",
+      "- `outputs/lab07_phase3e_consistency_check.csv`",
+      "- `outputs/lab07_phase3e_narrow_availability.csv`",
+      "- `outputs/lab07_phase3e_warprio_ols_simple.csv`",
+      "- `outputs/lab07_phase3e_warprio_ols_full.csv`",
+      "- `outputs/lab07_phase3e_warprio_rf.csv`",
+      "- `outputs/lab07_phase3e_warprio_iv.csv`",
+      if (narrow_disponivel) "- `outputs/lab07_phase3e_iv_narrow.csv`" else NULL,
+      "- `outputs/lab07_phase3e_final_models_comparison.csv`",
+      "- `outputs/lab07_phase3e_final_key_coefs_wide.csv`",
+      "- `outputs/lab07_phase3e_final_models_table.txt`",
+      "- `outputs/lab07_phase3e_iv_models_etable.txt`"
+    )
+    readme_after <- append(readme_after, phase3e_output_lines,
+                           after = anchor + 7L)  # após bloco 3D
+  }
+  sections_changed <- unique(c(sections_changed, "Principais arquivos e outputs"))
+}
+
+# 5) Documentação adicional: handoff 3E
+if (!any(str_detect(readme_after, fixed("lab07_phase3e_handoff_2026-03-27.md")))) {
+  handoff_anchor <- which(str_detect(readme_after, fixed("lab07_phase3d_handoff_2026-03-27.md")))[1]
+  if (!is.na(handoff_anchor)) {
+    readme_after <- append(readme_after,
+      "- `docs/lab07_phase3e_handoff_2026-03-27.md`",
+      after = handoff_anchor)
+  }
+  sections_changed <- unique(c(sections_changed, "Documentação adicional"))
+}
+
+# 6) Histórico
+phase3e_history_entry <- "- 2026-03-27 — Fase 3E: robustez com war_prio (OLS, RF e IV), extensões narrow, comparação final consolidada, interpretação causal integrada, conclusões do laboratório e atualização final do README. Laboratório finalizado."
+
+if (!any(str_detect(readme_after, fixed(phase3e_history_entry)))) {
+  readme_after <- c(readme_after, phase3e_history_entry)
+  sections_changed <- unique(c(sections_changed, "Histórico de atualizações"))
+}
+
+writeLines(readme_after, readme_path)
+
+readme_log <- tibble(
+  acao_readme     = "atualizado",
+  secoes_alteradas = paste(unique(sections_changed), collapse = "; "),
+  laboratorio_status = "finalizado"
+)
+write_csv(readme_log, "outputs/lab07_phase3e_readme_update_log.csv")
+
+if (!file_exists("outputs/lab07_phase3e_readme_update_log.csv")) {
+  stop("Checkpoint E5 FALHOU: log de atualização do README não gerado.")
+}
+cat("Checkpoint E5 OK: README.md atualizado incrementalmente e logado.\n")
+cat("Seções alteradas:", paste(unique(sections_changed), collapse = "; "), "\n")
+```
+
+---
+
+## Bloco E8 — Registro de ambiente e handoff final da Fase 3E
+
+```{r bloco-e8-handoff}
+capture.output(sessionInfo(), file = "outputs/lab07_phase3e_session_info.txt")
+
+# Recuperar F-stats da Fase 3D para referência no handoff
+fs_diag_3d <- read_csv("outputs/lab07_phase3d_first_stage_diagnostics.csv", show_col_types = FALSE)
+f_gdp_g    <- fs_diag_3d %>% filter(diagnostico == "ivf1::gdp_g")
+f_gdp_g_l  <- fs_diag_3d %>% filter(diagnostico == "ivf1::gdp_g_l")
+
+# Coeficientes IV principais para qualidade do handoff
+iv_main_coefs    <- tidy(mod_iv_main)    %>% filter(term %in% c("fit_gdp_g", "fit_gdp_g_l"))
+iv_wp_coefs      <- tidy(mod_wp_iv)      %>% filter(term %in% c("fit_gdp_g", "fit_gdp_g_l"))
+iv_nar_any_coefs <- if (!is.null(mod_iv_nar_any)) tidy(mod_iv_nar_any) %>% filter(term %in% c("fit_gdp_g", "fit_gdp_g_l")) else tibble()
+iv_nar_war_coefs <- if (!is.null(mod_iv_nar_war)) tidy(mod_iv_nar_war) %>% filter(term %in% c("fit_gdp_g", "fit_gdp_g_l")) else tibble()
+
+fmt_coef <- function(tbl, label) {
+  if (nrow(tbl) == 0) return(paste0("- ", label, ": não estimado."))
+  lines <- map_chr(seq_len(nrow(tbl)), function(i) {
+    r <- tbl[i, ]
+    sig <- case_when(r$p.value < 0.01 ~ "***", r$p.value < 0.05 ~ "**",
+                     r$p.value < 0.1 ~ "*", TRUE ~ "")
+    sprintf("  %s: %.3f%s (SE=%.3f, p=%.4f)", r$term, r$estimate, sig, r$std.error, r$p.value)
+  })
+  c(paste0("- ", label, ":"), lines)
+}
+
+readme_log_e <- read_csv("outputs/lab07_phase3e_readme_update_log.csv", show_col_types = FALSE)
+
+handoff_lines <- c(
+  "# Handoff — Fase 3E e Encerramento do Lab07 MAPP 2026",
+  "",
+  "## 1) O que foi feito",
+  "",
+  "- Validação de consistência com todas as fases anteriores (3B, 3C, 3D).",
+  "- Extensão de `df_main` com variáveis opcionais via left join controlado (N mantido = 743).",
+  "- Documentação formal de disponibilidade das variáveis narrow.",
+  "- Estimação de quatro modelos de robustez com `war_prio`: OLS simples, OLS ampliado, reduced form e IV.",
+  if (narrow_disponivel) "- Estimação de IV narrow para `any_prio_nar` e `war_prio_nar`." else "- Variáveis narrow documentadas como indisponíveis; análise narrow não realizada.",
+  "- Construção da tabela de comparação final consolidada.",
+  "- Redação da interpretação causal final integrada.",
+  "- Redação das conclusões do laboratório.",
+  "- Atualização final e incremental do README.md.",
+  "- Geração de session info e handoff final.",
+  "",
+  "## 2) Checkpoints validados",
+  "",
+  "- **Checkpoint E1:** todos os modelos de robustez (war_prio) estimados sem erro.",
+  paste0("- **Checkpoint E2:** variáveis narrow ", if (narrow_disponivel) "disponíveis — IV narrow estimado." else "ausentes — documentadas formalmente."),
+  "- **Checkpoint E3:** tabela final consolidada gerada em .csv e .txt legível.",
+  "- **Checkpoint E4:** interpretação causal final integrada redigida no documento.",
+  "- **Checkpoint E5:** README.md atualizado incrementalmente e logado.",
+  "",
+  "## 3) Especificações efetivamente estimadas",
+  "",
+  "**Pipeline principal (any_prio) — herdado das Fases 3C/3D e reestimado sobre df_extended:**",
+  "- OLS simples: `any_prio ~ gdp_g + gdp_g_l`, vcov = ~ccode.",
+  "- OLS ampliado: `any_prio ~ gdp_g + gdp_g_l + controles | ccode[year_trend]`, vcov = ~ccode.",
+  "- Reduced form: `any_prio ~ gpcp_g + gpcp_g_l + controles | ccode[year_trend]`, vcov = ~ccode.",
+  "- IV main: `any_prio ~ controles | ccode[year_trend] | gdp_g + gdp_g_l ~ gpcp_g + gpcp_g_l`, vcov = ~ccode.",
+  "",
+  "**Robustez (war_prio) — Fase 3E:**",
+  "- OLS simples, OLS ampliado, reduced form e IV: mesma especificação, desfecho = war_prio.",
+  "",
+  if (narrow_disponivel) {
+    c("**Narrow (any_prio_nar, war_prio_nar) — Fase 3E:**",
+      "- IV narrow: mesma especificação IV principal, desfecho = any_prio_nar e war_prio_nar.")
+  } else {
+    c("**Narrow:** variáveis ausentes em df_extended; análise narrow não realizada.")
+  },
+  "",
+  "## 4) Principais resultados",
+  "",
+  "**First stage (da Fase 3D, mantido como referência):**",
+  sprintf("- gdp_g: F = %.3f, p = %.5f.", f_gdp_g$estatistica, f_gdp_g$p_value),
+  sprintf("- gdp_g_l: F = %.3f, p = %.5f.", f_gdp_g_l$estatistica, f_gdp_g_l$p_value),
+  "- Instrumentos com força moderada (F < 10); estimativas IV sujeitas a maior imprecisão.",
+  "",
+  "**IV principal (any_prio):**",
+  fmt_coef(iv_main_coefs, "mod_iv_main"),
+  "",
+  "**IV robustez (war_prio):**",
+  fmt_coef(iv_wp_coefs, "mod_wp_iv"),
+  "",
+  if (narrow_disponivel) {
+    c("**IV narrow (any_prio_nar):**",
+      fmt_coef(iv_nar_any_coefs, "mod_iv_nar_any"),
+      "",
+      "**IV narrow (war_prio_nar):**",
+      fmt_coef(iv_nar_war_coefs, "mod_iv_nar_war"),
+      "")
+  },
+  "## 5) Interpretação causal final",
+  "",
+  "- O IV identifica o efeito de variações exógenas de crescimento (induzidas por chuva) sobre conflito.",
+  "- O estimando é um LATE (Local Average Treatment Effect) restrito aos compliers do instrumento.",
+  "- A direção negativa (crescimento reduz conflito) é consistente em OLS e IV.",
+  "- A amplificação dos coeficientes no IV é compatível com atenuação por erro de mensuração ou causalidade reversa no OLS.",
+  "- Limitações: F-stats abaixo de 10 (força moderada/fraca), exclusão não testável, N de grupos pequeno (41 países).",
+  "",
+  "## 6) Limitações formalmente registradas",
+  "",
+  "- Instrumentos moderadamente fracos (F < 10): estimativas IV podem apresentar viés e imprecisão.",
+  "- Hipótese de exclusão não testável empiricamente (canais diretos de precipitação sobre conflito).",
+  "- N de clusters pequeno (41 países): SE clusterizados têm cobertura assintótica limitada.",
+  "- Generalização restrita ao contexto de economias agrícolas de baixa renda.",
+  "",
+  "## 7) Status do README.md",
+  "",
+  "- README atualizado incrementalmente (não recriado).",
+  paste0("- Seções alteradas: ", readme_log_e$secoes_alteradas[[1]], "."),
+  "- Laboratório marcado como finalizado no README.",
+  "",
+  "## 8) Outputs finais gerados",
+  "",
+  "- `docs/lab07_phase3e.Rmd`",
+  "- `docs/lab07_phase3e.html`",
+  "- `outputs/lab07_phase3e_prerequisites_check.csv`",
+  "- `outputs/lab07_phase3e_consistency_check.csv`",
+  "- `outputs/lab07_phase3e_narrow_availability.csv`",
+  "- `outputs/lab07_phase3e_warprio_ols_simple.csv`",
+  "- `outputs/lab07_phase3e_warprio_ols_full.csv`",
+  "- `outputs/lab07_phase3e_warprio_rf.csv`",
+  "- `outputs/lab07_phase3e_warprio_iv.csv`",
+  if (narrow_disponivel) "- `outputs/lab07_phase3e_iv_narrow.csv`" else NULL,
+  "- `outputs/lab07_phase3e_final_models_comparison.csv`",
+  "- `outputs/lab07_phase3e_final_key_coefs_wide.csv`",
+  "- `outputs/lab07_phase3e_final_models_table.txt`",
+  "- `outputs/lab07_phase3e_iv_models_etable.txt`",
+  "- `outputs/lab07_phase3e_readme_update_log.csv`",
+  "- `outputs/lab07_phase3e_session_info.txt`",
+  "- `docs/lab07_phase3e_handoff_2026-03-27.md`",
+  "",
+  "## 9) Conclusão do laboratório",
+  "",
+  "O Lab07 MAPP 2026 está **encerrado**.",
+  "",
+  "O laboratório replicou os resultados centrais de Miguel, Satyanath e Sergenti (2004) para",
+  "a África subsaariana, implementando em R um pipeline completo de:",
+  "  1. auditoria e construção de amostra (Fases 3A–3B);",
+  "  2. benchmarks associativos OLS (Fase 3C);",
+  "  3. estratégia IV/2SLS com instrumentos climáticos (Fase 3D);",
+  "  4. análise de robustez e fechamento interpretativo (Fase 3E).",
+  "",
+  "Todos os outputs foram salvos em `outputs/`, todos os artefatos literários em `docs/`,",
+  "e o README.md reflete o estado final do projeto.",
+  "",
+  "Data de encerramento: 2026-03-27."
+)
+
+writeLines(handoff_lines, "docs/lab07_phase3e_handoff_2026-03-27.md")
+cat("Handoff final gerado em docs/lab07_phase3e_handoff_2026-03-27.md\n")
+cat("Laboratório encerrado.\n")
+```

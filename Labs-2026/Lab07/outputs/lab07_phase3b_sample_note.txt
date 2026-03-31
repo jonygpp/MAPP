@@ -1,0 +1,7 @@
+Lab07 Fase 3B — Nota de amostra
+- N inicial: 743.
+- N final (df_main): 743.
+- Observações excluídas por missing nas variáveis obrigatórias: 0.
+- Países únicos na amostra final: 41.
+- Anos únicos na amostra final: 19.
+- A amostra final está na ordem de grandeza de algumas centenas de observações país-ano, compatível com a escala do artigo e da base de replicação feb07. Diferenças residuais podem decorrer da versão da base, da reconstituição fiel de aliases canônicos em R e do fato de a Fase 3B exigir apenas completude nas variáveis obrigatórias do modelo principal.
