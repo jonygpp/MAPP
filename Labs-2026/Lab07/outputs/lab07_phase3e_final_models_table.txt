@@ -1,0 +1,17 @@
+================================================================================
+  Comparação final de modelos — Lab07 MAPP 2026
+================================================================================
+  Modelo                                  gdp_g [est (SE)]          gdp_g_l [est (SE)]        Desfecho      
+--------------------------------------------------------------------------------
+  OLS simples (any_prio)                  -0.309 (0.275)            -0.073 (0.253)            any_prio      
+  OLS ampliado (any_prio)                 -0.174 (0.144)            0.099 (0.168)             any_prio      
+  IV second stage (any_prio)              -1.151 (1.459)            -2.619* (1.228)           any_prio      
+  IV second stage (war_prio)              -1.375 (0.825)            -0.692 (0.716)            war_prio      
+  IV narrow (any_prio_nar)                -0.822 (1.177)            -2.383* (1.168)           any_prio_nar  
+  IV narrow (war_prio_nar)                -0.889 (0.596)            -0.274 (0.638)            war_prio_nar  
+--------------------------------------------------------------------------------
+  Nota: estimativas com erros-padrão clusterizados por ccode entre parênteses.
+  * p<0.1; ** p<0.05; *** p<0.01
+  Especificação IV: FE ccode[year_trend]; instrumentos gpcp_g + gpcp_g_l.
+  Variáveis removidas por colinearidade: y_0, ethfrac, relfrac, lmtnest.
+================================================================================

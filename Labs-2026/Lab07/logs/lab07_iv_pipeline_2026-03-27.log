@@ -1,0 +1,456 @@
+=== INÍCIO DO PIPELINE IV (LAB07) ===
+Diretório de trabalho: /Users/ricardoceneviva/Library/CloudStorage/Dropbox/UFABC/MAPP/Labs/Labs-2026/MAPP2026-Lab07 
+tibble [743 × 200] (S3: tbl_df/tbl/data.frame)
+ $ ccode                : num [1:743] 540 540 540 540 540 540 540 540 540 540 ...
+  ..- attr(*, "label")= chr "COW Country Code"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ year                 : num [1:743] 1981 1982 1983 1984 1985 ...
+  ..- attr(*, "label")= chr "Year"
+  ..- attr(*, "format.stata")= chr "%ty"
+ $ country_name         : chr [1:743] "Angola" "Angola" "Angola" "Angola" ...
+  ..- attr(*, "label")= chr "Country Name"
+  ..- attr(*, "format.stata")= chr "%28s"
+ $ country_code         : chr [1:743] "AGO" "AGO" "AGO" "AGO" ...
+  ..- attr(*, "label")= chr "Country Code (often same as World Bank Country Code)"
+  ..- attr(*, "format.stata")= chr "%9s"
+ $ GPCP                 : num [1:743] 839 970 936 993 974 ...
+  ..- attr(*, "label")= chr "GPCP: Avg Precipitation in mm per year - NASA GPCP V2 (Huffman et al., 1997)"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ GPCP_l               : num [1:743] 912 839 970 936 993 ...
+  ..- attr(*, "label")= chr "GPCP lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ GPCP_l2              : num [1:743] 1022 912 839 970 936 ...
+  ..- attr(*, "label")= chr "GPCP lagged two periods"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ GPCP_g               : num [1:743] -0.0797 0.1557 -0.0345 0.0599 -0.0183 ...
+  ..- attr(*, "label")= chr "GPCP growth"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ GPCP_g_l             : num [1:743] -0.1076 -0.0797 0.1557 -0.0345 0.0599 ...
+  ..- attr(*, "label")= chr "GPCP_g lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ GPCP_g_fl            : num [1:743] 0.1557 -0.0345 0.0599 -0.0183 0.216 ...
+  ..- attr(*, "label")= chr "GPCP_g lagged forward one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ GPCP_d               : num [1:743] -72.6 130.6 -33.4 56.1 -18.1 ...
+  ..- attr(*, "label")= chr "GPCP first difference"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ GPCP_d_l             : num [1:743] -109.9 -72.6 130.6 -33.4 56.1 ...
+  ..- attr(*, "label")= chr "GPCP_d lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ GPCP_df_mean         : num [1:743] -99.86 30.79 -2.65 53.46 35.32 ...
+  ..- attr(*, "label")= chr "GPCP difference from the mean (of the 1979 to 2001 observations)"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ GPCP_df_mean_l       : num [1:743] -27.22 -99.86 30.79 -2.65 53.46 ...
+  ..- attr(*, "label")= chr "GPCP_df_mean lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ GPCP_df_mean_l2      : num [1:743] 82.71 -27.22 -99.86 30.79 -2.65 ...
+  ..- attr(*, "label")= chr "GPCP_df_mean lagged two periods"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NCEP                 : num [1:743] 812 964 1007 985 1222 ...
+  ..- attr(*, "label")= chr "NCEP: Avg Precipitation in mm per year - NOAA NCEP CPC Merged (Xie & Arkin, 1996"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NCEP_l               : num [1:743] 897 812 964 1007 985 ...
+  ..- attr(*, "label")= chr "NCEP lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NCEP_l2              : num [1:743] 1147 897 812 964 1007 ...
+  ..- attr(*, "label")= chr "NCEP lagged two periods"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NCEP_g               : num [1:743] -0.0943 0.1872 0.0439 -0.0214 0.2405 ...
+  ..- attr(*, "label")= chr "NCEP growth"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NCEP_g_l             : num [1:743] -0.2178 -0.0943 0.1872 0.0439 -0.0214 ...
+  ..- attr(*, "label")= chr "NCEP_g lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NCEP_g_fl            : num [1:743] 0.1872 0.0439 -0.0214 0.2405 -0.0129 ...
+  ..- attr(*, "label")= chr "NCEP_g lagged forward one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NCEP_d               : num [1:743] -84.6 152.1 42.3 -21.6 236.9 ...
+  ..- attr(*, "label")= chr "NCEP first difference"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NCEP_d_l             : num [1:743] -249.7 -84.6 152.1 42.3 -21.6 ...
+  ..- attr(*, "label")= chr "NCEP_d lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NCEP_df_mean         : num [1:743] -240.4 -88.3 -46 -67.5 169.4 ...
+  ..- attr(*, "label")= chr "NCEP difference from the mean (of the 1979 to 2001 observations)"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NCEP_df_mean_l       : num [1:743] -155.8 -240.4 -88.3 -46 -67.5 ...
+  ..- attr(*, "label")= chr "NCEP_df_mean lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NCEP_df_mean_l2      : num [1:743] 94 -155.8 -240.4 -88.3 -46 ...
+  ..- attr(*, "label")= chr "NCEP_df_mean lagged two periods"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ sm_obs               : num [1:743] 45 40 45 39 25 3 0 0 0 0 ...
+  ..- attr(*, "label")= chr "FAOCLIM2: Number of Station-Month Observations used in calculating FAO"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ FAO                  : num [1:743] 347 416 632 519 856 ...
+  ..- attr(*, "label")= chr "FAOCLIM2: Avg Precipitation in mm per year"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ FAO_l                : num [1:743] 636 347 416 632 519 ...
+  ..- attr(*, "label")= chr "FAO lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ FAO_l2               : num [1:743] 818 636 347 416 632 ...
+  ..- attr(*, "label")= chr "FAO lagged two periods"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ FAO_g                : num [1:743] -0.455 0.2 0.519 -0.179 0.649 ...
+  ..- attr(*, "label")= chr "FAO growth"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ FAO_g_l              : num [1:743] -0.222 -0.455 0.2 0.519 -0.179 ...
+  ..- attr(*, "label")= chr "FAO_g lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ FAO_g_fl             : num [1:743] 0.2 0.519 -0.179 0.649 -0.688 ...
+  ..- attr(*, "label")= chr "FAO_g lagged forward one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ FAO_d                : num [1:743] -289.4 69.4 215.8 -112.9 336.9 ...
+  ..- attr(*, "label")= chr "FAO first difference"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ FAO_d_l              : num [1:743] -181.5 -289.4 69.4 215.8 -112.9 ...
+  ..- attr(*, "label")= chr "FAO_d lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ FAO_df_mean          : num [1:743] -521.4 -452 -236.1 -349.1 -12.1 ...
+  ..- attr(*, "label")= chr "FAO difference from the mean (of the 1960 to the latest available observations)"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ FAO_df_mean_l        : num [1:743] -232 -521 -452 -236 -349 ...
+  ..- attr(*, "label")= chr "FAO_df_mean lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ FAO_df_mean_l2       : num [1:743] -50.5 -232 -521.4 -452 -236.1 ...
+  ..- attr(*, "label")= chr "FAO_df_mean lagged two periods"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NDVI                 : num [1:743] NA 4439 4296 4346 4536 ...
+  ..- attr(*, "label")= chr "NDVI: Normalized Difference Vegetation Index"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NDVI_l               : num [1:743] NA NA 4439 4296 4346 ...
+  ..- attr(*, "label")= chr "NDVI lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NDVI_l2              : num [1:743] NA NA NA 4439 4296 ...
+  ..- attr(*, "label")= chr "NDVI lagged two periods"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NDVI_g               : num [1:743] NA NA -0.0322 0.0117 0.0436 ...
+  ..- attr(*, "label")= chr "NDVI growth"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NDVI_g_l             : num [1:743] NA NA NA -0.0322 0.0117 ...
+  ..- attr(*, "label")= chr "NDVI_g lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NDVI_g_fl            : num [1:743] NA -0.0322 0.0117 0.0436 0.03 ...
+  ..- attr(*, "label")= chr "NDVI_g lagged forward one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NDVI_d               : num [1:743] NA NA -142.9 50.3 189.6 ...
+  ..- attr(*, "label")= chr "NDVI first difference"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NDVI_d_l             : num [1:743] NA NA NA -142.9 50.3 ...
+  ..- attr(*, "label")= chr "NDVI_d lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NDVI_df_mean         : num [1:743] NA 21.7 -121.2 -70.8 118.8 ...
+  ..- attr(*, "label")= chr "NDVI difference from the mean (of the 1982 to 2001 observations)"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NDVI_df_mean_l       : num [1:743] NA NA 21.7 -121.2 -70.8 ...
+  ..- attr(*, "label")= chr "NDVI_df_mean lagged one period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ NDVI_df_mean_l2      : num [1:743] NA NA NA 21.7 -121.2 ...
+  ..- attr(*, "label")= chr "NDVI_df_mean lagged two periods"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ type3                : num [1:743] 0 0 0 0 0 0 0 0 0 3 ...
+  ..- attr(*, "label")= chr "PRIO/UPPSALA: Internal Conflict - 0=None 1=Minor 2=Intermediate 3=War"
+  ..- attr(*, "format.stata")= chr "%8.0g"
+ $ type4                : num [1:743] 3 3 3 3 3 3 3 3 3 0 ...
+  ..- attr(*, "label")= chr "PRIO/UPPSALA: Internationalized Internal Conflict - 0=None 1=Minor 2=Inter 3=War"
+  ..- attr(*, "format.stata")= chr "%8.0g"
+ $ war_prio             : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "Internal War or Internationalized Internal War - Type 3 = 3 or Type 4 = 3"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ minor_prio           : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "Minor or Intermediate Internal Conf or Intl Internal Conf - Type 3 or 4 = 1 or 2"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ any_prio             : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "Any Internal or Intl Internal Conflict - Type 3 or 4 = 1, 2, or 3"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ war_prio_on          : num [1:743] NA NA NA NA NA NA NA NA NA NA ...
+  ..- attr(*, "label")= chr "WAR_PRIO Onset"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ minor_prio_on        : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "MINOR_PRIO Onset"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ any_prio_on          : num [1:743] NA NA NA NA NA NA NA NA NA NA ...
+  ..- attr(*, "label")= chr "ANY_PRIO Onset"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ war_prio_off         : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "WAR_PRIO Offset"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ minor_prio_off       : num [1:743] NA NA NA NA NA NA NA NA NA NA ...
+  ..- attr(*, "label")= chr "MINOR_PRIO Offset"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ any_prio_off         : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "ANY_PRIO Offset"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ wars                 : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "FL: # wars in progress in country year"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ war                  : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "FL: 1 if war ongoing in country year"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ warl                 : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "FL: lagged war, w/ 0 for start of country series"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ onset                : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "FL: 1 for civil war onset"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ ended                : num [1:743] NA NA NA NA NA NA NA NA NA NA ...
+  ..- attr(*, "label")= chr "FL: war ends = 1, 0 = ongoing"
+  ..- attr(*, "format.stata")= chr "%8.0g"
+ $ waryrs               : chr [1:743] "" "" "" "" ...
+  ..- attr(*, "label")= chr "FL: war years for each onset"
+  ..- attr(*, "format.stata")= chr "%9s"
+ $ pop                  : num [1:743] 7783 7990 8202 8400 8605 ...
+  ..- attr(*, "label")= chr "FL: population, in 1000s"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ lpop                 : num [1:743] 8.96 8.99 9.01 9.04 9.06 ...
+  ..- attr(*, "label")= chr "FL: log of pop"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ polity2              : num [1:743] -7 -7 -7 -7 -7 -7 -7 -7 -7 -7 ...
+  ..- attr(*, "label")= chr "FL: revised polity score"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ gdpen                : num [1:743] 0.65 0.679 0.673 0.691 0.711 ...
+  ..- attr(*, "label")= chr "FL: gdp/pop based on pwt5.6, wdi2001,cow energy data"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ gdpenl               : num [1:743] 0.675 0.65 0.679 0.673 0.691 ...
+  ..- attr(*, "label")= chr "FL: lagged gdpenl, except for first in country series"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ lgdpenl1             : num [1:743] 6.51 6.48 6.52 6.51 6.54 ...
+  ..- attr(*, "label")= chr "FL: log of lagged gdpen"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ lpopl1               : num [1:743] 8.93 8.96 8.99 9.01 9.04 ...
+  ..- attr(*, "label")= chr "FL: log population, lagged except for first in country series"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ colbrit              : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "FL: Former British colony"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ colfra               : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "FL: Former French colony"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ mtnest               : num [1:743] 9.7 9.7 9.7 9.7 9.7 ...
+  ..- attr(*, "label")= chr "FL: Estimated % mountainous terrain"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ lmtnest              : num [1:743] 2.37 2.37 2.37 2.37 2.37 ...
+  ..- attr(*, "label")= chr "FL: log of mtnest"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ Oil                  : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "FL: > 1/3 export revenues from fuels"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ ncontig              : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "FL: noncontiguous state"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ ethfrac              : num [1:743] 0.783 0.783 0.783 0.783 0.783 ...
+  ..- attr(*, "label")= chr "FL: ethnic frac. based on Soviet Atlas, plus est's for missing in 1964"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ ef                   : num [1:743] 0.756 0.756 0.756 0.756 0.756 ...
+  ..- attr(*, "label")= chr "FL: ethnic fractionalization based on Fearon 2002 APSA paper"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ relfrac              : num [1:743] 0.612 0.612 0.612 0.612 0.612 ...
+  ..- attr(*, "label")= chr "FL: religious fractionalization"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ nwstate              : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "FL: 1 in 1st 2 years of state's existence"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ polity2l             : num [1:743] -7 -7 -7 -7 -7 -7 -7 -7 -7 -7 ...
+  ..- attr(*, "label")= chr "FL: lagged polity2, except 1st in country series"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ instab               : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "FL: > 2 change in Polity measure in last 3 yrs"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ deml                 : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "FL: lagged democracy (polity2l > 5)"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ sdwars               : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "FL: # Sambanis/Doyle civ wars in progress"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ sdonset              : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "FL: onset of Sambanis/Doyle war"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ colwars              : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "FL: # Collier/Hoeffler wars in progress"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ colonset             : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "FL: onset of Collier/Hoeffler war"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ cowwars              : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "FL: # COW civ wars in progress"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ cowonset             : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "FL: onset of COW civ war"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ cowwarl              : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "FL: 1 if COW war ongoing in last period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ sdwarl               : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "FL: 1 if S/D war ongoing in last period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ colwarl              : num [1:743] 1 1 1 1 1 1 1 1 1 1 ...
+  ..- attr(*, "label")= chr "FL: 1 if C/H war ongoing in last period"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ gdp_g                : num [1:743] -0.03704 0.04462 -0.00884 0.02675 0.02894 ...
+  ..- attr(*, "label")= chr "(GDPEN - GDPENL) / GDPENL"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ gdp_g_l              : num [1:743] 0.01964 -0.03704 0.04462 -0.00884 0.02675 ...
+  ..- attr(*, "label")= chr "GDP_G lagged"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ y_0                  : num [1:743] 0.662 0.662 0.662 0.662 0.662 ...
+  ..- attr(*, "label")= chr "GDP per capita in 1979 (1990 for Namibia) - from FL gdpen"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+ $ polity2l_6           : num [1:743] 0 0 0 0 0 0 0 0 0 0 ...
+  ..- attr(*, "label")= chr "Democracy Indicator - 1 if polity2l >= 6, 0 otherwise"
+  ..- attr(*, "format.stata")= chr "%9.0g"
+  [list output truncated]
+ - attr(*, "label")= chr "Miguel, Satyanath, Sergenti 2004, Civil Conflict"
+ - attr(*, "notes")= chr [1:30] "dropped Germany (ccode = 255) for lack of data, added missing cases for Czechoslovakia to match to cyear2 data" "I have asked David on Nigeria who quotes Morrison's data: Hausa-Fulani 29%, Yoruba 20%" "in France taking the North African countries separately every one of them loses out to the share of immigrants "| __truncated__ "Catalan speakers are as many as .1875 of Spanish pop. Problem: bilingualism. Source: Euromosaic." ...
+[1] 743 200
+Checkpoint 1 OK: dataset carregado com 743 observações.
+  [1] "ccode"                 "year"                  "country_name"         
+  [4] "country_code"          "GPCP"                  "GPCP_l"               
+  [7] "GPCP_l2"               "GPCP_g"                "GPCP_g_l"             
+ [10] "GPCP_g_fl"             "GPCP_d"                "GPCP_d_l"             
+ [13] "GPCP_df_mean"          "GPCP_df_mean_l"        "GPCP_df_mean_l2"      
+ [16] "NCEP"                  "NCEP_l"                "NCEP_l2"              
+ [19] "NCEP_g"                "NCEP_g_l"              "NCEP_g_fl"            
+ [22] "NCEP_d"                "NCEP_d_l"              "NCEP_df_mean"         
+ [25] "NCEP_df_mean_l"        "NCEP_df_mean_l2"       "sm_obs"               
+ [28] "FAO"                   "FAO_l"                 "FAO_l2"               
+ [31] "FAO_g"                 "FAO_g_l"               "FAO_g_fl"             
+ [34] "FAO_d"                 "FAO_d_l"               "FAO_df_mean"          
+ [37] "FAO_df_mean_l"         "FAO_df_mean_l2"        "NDVI"                 
+ [40] "NDVI_l"                "NDVI_l2"               "NDVI_g"               
+ [43] "NDVI_g_l"              "NDVI_g_fl"             "NDVI_d"               
+ [46] "NDVI_d_l"              "NDVI_df_mean"          "NDVI_df_mean_l"       
+ [49] "NDVI_df_mean_l2"       "type3"                 "type4"                
+ [52] "war_prio"              "minor_prio"            "any_prio"             
+ [55] "war_prio_on"           "minor_prio_on"         "any_prio_on"          
+ [58] "war_prio_off"          "minor_prio_off"        "any_prio_off"         
+ [61] "wars"                  "war"                   "warl"                 
+ [64] "onset"                 "ended"                 "waryrs"               
+ [67] "pop"                   "lpop"                  "polity2"              
+ [70] "gdpen"                 "gdpenl"                "lgdpenl1"             
+ [73] "lpopl1"                "colbrit"               "colfra"               
+ [76] "mtnest"                "lmtnest"               "Oil"                  
+ [79] "ncontig"               "ethfrac"               "ef"                   
+ [82] "relfrac"               "nwstate"               "polity2l"             
+ [85] "instab"                "deml"                  "sdwars"               
+ [88] "sdonset"               "colwars"               "colonset"             
+ [91] "cowwars"               "cowonset"              "cowwarl"              
+ [94] "sdwarl"                "colwarl"               "gdp_g"                
+ [97] "gdp_g_l"               "y_0"                   "polity2l_6"           
+[100] "war_col"               "warstds"               "war_on"               
+[103] "war_inc"               "tot_100"               "tot_100_l"            
+[106] "tot_100_g"             "tot_adj"               "trade_pGDP"           
+[109] "trade_goods_pGDP"      "trade_goods_pgoodsGDP" "mil_exp"              
+[112] "mil_pers"              "unemploy"              "roads_net"            
+[115] "tax_rev_p"             "tax_rev"               "male_school"          
+[118] "male_school_net"       "pop_den"               "pop_den_rur"          
+[121] "aid_capita"            "gini"                  "income_4th20"         
+[124] "income_1st10"          "income_1st20"          "income_10th10"        
+[127] "income_5th20"          "income_2th20"          "income_3rd20"         
+[130] "land_arable"           "land_crop"             "land_forest"          
+[133] "land_crop_irrig"       "land_other"            "va_agr"               
+[136] "va_ind_manf"           "va_ind_tot"            "va_serv"              
+[139] "pop_0014_fem"          "pop_0014_male"         "pop_0014_tot"         
+[142] "pop_0014_ptot"         "pop_1564_fem"          "pop_1564_ptot"        
+[145] "pop_1564_male"         "pop_1564_tot"          "pop_65up_fem"         
+[148] "pop_65up_male"         "pop_65up_fem_pmale"    "pop_65up_tot"         
+[151] "pop_65up_ptot"         "pov_head_nat"          "pov_head_rur"         
+[154] "pov_head_urb"          "pop_rur_ptot"          "pop_tot"              
+[157] "pop_1524_male"         "per_0014"              "per_1524"             
+[160] "fao_foodaid"           "ethnic"                "language"             
+[163] "religion"              "democ"                 "autoc"                
+[166] "polity"                "polity2_IV"            "durable"              
+[169] "xrreg"                 "xrcomp"                "xropen"               
+[172] "xconst"                "parreg"                "parcomp"              
+[175] "exrec"                 "exconst"               "polcomp"              
+[178] "military"              "execrlc"               "execnat"              
+[181] "execrurl"              "execreg"               "execrel"              
+[184] "execage"               "allhouse"              "herfgov"              
+[187] "herfopp"               "oppfrac"               "checks"               
+[190] "auton"                 "muni"                  "state"                
+[193] "author"                "stconst"               "fh_civ"               
+[196] "fh_pol"                "S"                     "W"                    
+[199] "WoverS"                "soc"                  
+[1] 743   3
+    conflict          growth               rain          
+ Min.   :0.0000   Min.   :-0.473973   Min.   :-0.549871  
+ 1st Qu.:0.0000   1st Qu.:-0.035983   1st Qu.:-0.111882  
+ Median :0.0000   Median : 0.000000   Median : 0.005001  
+ Mean   :0.1669   Mean   :-0.004754   Mean   : 0.018195  
+ 3rd Qu.:0.0000   3rd Qu.: 0.024922   3rd Qu.: 0.119282  
+ Max.   :1.0000   Max.   : 0.670412   Max.   : 1.676976  
+Checkpoint 2 OK: variáveis identificadas e dataset sem NA.
+Modelo: conflict ~ growth | instrumento: rain
+Checkpoint 3 OK: variáveis do modelo definidas corretamente.
+
+t test of coefficients:
+
+             Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  0.166196   0.013734  12.101   <2e-16 ***
+growth      -0.146231   0.273329  -0.535   0.5928    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Checkpoint 4 OK: OLS estimado e coeficiente de growth disponível.
+OLS estimation, Dep. Var.: growth
+Observations: 743
+Standard-errors: IID 
+             Estimate Std. Error  t value   Pr(>|t|)    
+(Intercept) -0.005513   0.002585 -2.13253 0.03329176 *  
+rain         0.041704   0.012307  3.38865 0.00073951 ***
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+RMSE: 0.070109   Adj. R2: 0.013931
+F-test: stat = 11.483, p = 7.395e-4, on 1 and 741 DoF.
+Checkpoint 5 OK: first stage estimado e F-stat calculado.
+OLS estimation, Dep. Var.: conflict
+Observations: 743
+Standard-errors: IID 
+             Estimate Std. Error  t value  Pr(>|t|)    
+(Intercept)  0.168015   0.013741 12.22684 < 2.2e-16 ***
+rain        -0.061749   0.065416 -0.94394   0.34551    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+RMSE: 0.372655   Adj. R2: -1.469e-4
+Checkpoint 6 OK: reduced form estimado sem erro.
+TSLS estimation - Dep. Var.: conflict
+                  Endo.    : growth
+                  Instr.   : rain
+Second stage: Dep. Var.: conflict
+Observations: 743
+Standard-errors: IID 
+             Estimate Std. Error   t value  Pr(>|t|)    
+(Intercept)  0.159852   0.016084  9.938775 < 2.2e-16 ***
+fit_growth  -1.480635   1.618317 -0.914923   0.36053    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+RMSE: 0.384473   Adj. R2: -1.469e-4
+F-test (1st stage), growth: stat = 11.48296, p = 7.395e-4, on 1 and 741 DoF.
+                Wu-Hausman: stat =  0.73435, p = 0.391755, on 1 and 740 DoF.
+
+t test of coefficients:
+
+            Estimate Std. Error t value Pr(>|t|)
+(Intercept)  0.15985        NaN     NaN      NaN
+fit_growth  -1.48064        NaN     NaN      NaN
+
+Checkpoint 7 OK: modelo IV estimado e coeficiente de growth disponível.
+                         model_ols           model_iv
+Dependent Var.:           conflict           conflict
+                                                     
+Constant        0.1662*** (0.0137) 0.1599*** (0.0156)
+growth            -0.1462 (0.2733)     -1.481 (1.521)
+_______________ __________________ __________________
+S.E. type       Heteroskedas.-rob. Heteroskedas.-rob.
+Observations                   743                743
+R2                         0.00077            0.00120
+Adj. R2                   -0.00058           -0.00015
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+Checkpoint 8 OK: tabela comparativa OLS vs IV gerada.
+F-stat do first stage: 11.48296 
+Sinal OLS (growth -> conflict): negativo 
+Sinal IV (growth -> conflict): negativo 
+Diferença (IV - OLS): -1.334405 
+Checkpoint 9 OK: diagnósticos reportados.
+Checkpoint final OK: outputs organizados e salvos em outputs/.
+=== FIM DO PIPELINE IV (LAB07) ===

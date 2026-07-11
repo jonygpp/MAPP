@@ -1,0 +1,18 @@
+		mod_iv_main	mod_wp_iv
+1	 	IV any_prio	IV war_prio
+2	Dependent Var.:	any_prio	war_prio
+3	  	 	 
+4	gdp_g	-1.151 (1.459)	-1.375 (0.8250)
+5	gdp_g_l	-2.619* (1.228)	-0.6920 (0.7163)
+6	polity2l	-0.0016 (0.0055)	-0.0014 (0.0045)
+7	oil	-0.0972 (0.1250)	-0.0795 (0.0700)
+8	lpopl1	-0.3175 (1.136)	0.4955 (0.7383)
+9	Fixed-Effects:	----------------	----------------
+10	ccode	Yes	Yes
+11	Varying Slopes:	----------------	----------------
+12	year_trend (ccode)	Yes	Yes
+13	__________________	________________	________________
+14	S.E.: Clustered	by: ccode	by: ccode
+15	Observations	743	743
+16	R2	0.70991	0.70366
+17	Within R2	0.01477	0.01994

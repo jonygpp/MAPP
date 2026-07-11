@@ -1,0 +1,3 @@
+item,origem_detectada,acao,observacao
+CCODE,ccode,alias canônico reconstituído ou preservado conforme decisão validada da Fase 3A,"Na leitura atual em R, a base expõe `ccode`; o alias `CCODE` foi mantido explicitamente para auditabilidade."
+YEAR_ACTUAL,year,alias canônico reconstituído ou preservado conforme decisão validada da Fase 3A,"Na leitura atual em R, a variável temporal detectada foi `year`; `YEAR_ACTUAL` foi reconstituída fielmente para preservar a decisão canônica da Fase 3A."

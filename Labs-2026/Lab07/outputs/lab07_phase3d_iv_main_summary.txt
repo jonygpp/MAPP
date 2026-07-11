@@ -1,0 +1,23 @@
+TSLS estimation - Dep. Var.: any_prio
+                  Endo.    : gdp_g, gdp_g_l
+                  Instr.   : gpcp_g, gpcp_g_l
+Second stage: Dep. Var.: any_prio
+Observations: 743
+Fixed-effects: ccode: 41
+Varying slopes: year_trend (ccode): 41
+Standard-errors: Clustered (ccode) 
+             Estimate Std. Error   t value Pr(>|t|)    
+fit_gdp_g   -1.151261   1.459056 -0.789045 0.434738    
+fit_gdp_g_l -2.619097   1.227981 -2.132849 0.039125 *  
+polity2l    -0.001607   0.005508 -0.291772 0.771969    
+oil         -0.097210   0.125011 -0.777614 0.441372    
+lpopl1      -0.317469   1.136137 -0.279428 0.781356    
+... 4 variables were removed because of collinearity (y_0, ethfrac and 2
+others [full set in $collin.var])
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+RMSE: 0.304921     Adj. R2: 0.671878
+                 Within R2: 0.014773
+F-test (1st stage), gdp_g  : stat = 6.3995, p = 0.001762, on 2 and 696 DoF.
+F-test (1st stage), gdp_g_l: stat = 5.1382, p = 0.006093, on 2 and 696 DoF.
+                 Wu-Hausman: stat =     NA, p = NA      , on 2 and 654 DoF.

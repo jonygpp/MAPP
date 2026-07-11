@@ -1,0 +1,6 @@
+OLS não identifica causalidade por endogeneidade de crescimento.
+First stage documenta relevância empírica do instrumento.
+Exclusão é hipótese substantiva, não testável plenamente no desenho principal.
+Efeito IV é local (LATE).
+NDVI não integra o núcleo instrumental deste Lab07.
+Narrow robustness é extensão opcional.

@@ -1,0 +1,605 @@
+---
+title: "Lab07 MAPP — Replicação parcial didática (MSS 2004)"
+author: "Agente executor IA"
+date: "2026-03-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+```
+
+## Classificação da tarefa
+
+- **Modo principal:** empirical analysis
+- **Função secundária:** pedagogical support
+
+## Fontes canônicas utilizadas
+
+1. Instruções validadas do usuário (prompt operacional desta fase)
+2. `AGENTS.md`
+3. `Workflow-Projeto.md`
+4. Miguel, Satyanath e Sergenti (2004)
+5. `Data/mss_manual_feb07.pdf`
+6. Inventário `files_list.md` (localizado em `docs/files_list.md`)
+7. `Data/mss_repdata_feb07.dta` e `Data/mss_rep_results.do`
+
+---
+
+## Bloco 0 — Pacotes, caminhos e verificações de existência
+
+```{r packages-and-paths}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(haven)
+  library(fixest)
+  library(modelsummary)
+  library(broom)
+  library(fs)
+})
+
+# Caminho relativo a partir deste arquivo (docs/ -> raiz)
+project_root <- knitr::opts_knit$get("root.dir")
+
+if (!dir_exists("outputs")) dir_create("outputs")
+if (!dir_exists("logs")) dir_create("logs")
+if (!dir_exists("docs")) dir_create("docs")
+
+required_files <- tibble::tribble(
+  ~arquivo_requerido, ~caminho,
+  "AGENTS.md", "AGENTS.md",
+  "Workflow-Projeto.md", "Workflow-Projeto.md",
+  "files_list.md", "files_list.md",
+  "Data/mss_repdata_feb07.dta", "Data/mss_repdata_feb07.dta",
+  "Data/mss_manual_feb07.pdf", "Data/mss_manual_feb07.pdf",
+  "Data/mss_rep_results.do", "Data/mss_rep_results.do"
+) %>%
+  mutate(existe = file_exists(caminho))
+
+# Tratamento explícito do inventário (esperado na raiz, disponível em docs/)
+if (!required_files$existe[required_files$arquivo_requerido == "files_list.md"] && file_exists("docs/files_list.md")) {
+  required_files <- required_files %>%
+    mutate(
+      existe = if_else(arquivo_requerido == "files_list.md", TRUE, existe),
+      caminho = if_else(arquivo_requerido == "files_list.md", "docs/files_list.md", caminho)
+    )
+}
+
+required_files
+
+write_csv(required_files, "outputs/lab07_file_existence_check.csv")
+
+missing_required <- required_files %>% filter(!existe)
+if (nrow(missing_required) > 0) {
+  stop(
+    "Fonte canônica ausente: ",
+    paste(missing_required$arquivo_requerido, collapse = ", "),
+    ". Execução interrompida."
+  )
+}
+```
+
+**Resultado:** existência física dos arquivos canônicos registrada em `outputs/lab07_file_existence_check.csv`.
+
+---
+
+## Bloco 1 — Ingestão de dados (base canônica feb07)
+
+Objetivo: importar a base Stata canônica e preservar metadados.
+
+```{r block1-ingestion}
+df_raw <- haven::read_dta("Data/mss_repdata_feb07.dta")
+
+# Evidências de ingestão
+raw_dim <- dim(df_raw)
+raw_names <- names(df_raw)
+raw_class <- class(df_raw)
+
+raw_dim
+length(raw_names)
+head(raw_names, 30)
+raw_class
+
+# Preservação de atributos/rótulos
+raw_label <- attr(df_raw, "label")
+raw_notes <- attr(df_raw, "notes")
+
+list(
+  dataset_label = raw_label,
+  notes_n = ifelse(is.null(raw_notes), 0, length(raw_notes))
+)
+
+# Padronização mínima para cumprir requisito de checagem sem destruir variáveis originais
+names_upper <- toupper(raw_names)
+has_ccode <- "CCODE" %in% names_upper
+has_year_actual <- "YEAR_ACTUAL" %in% names_upper
+has_year <- "YEAR" %in% names_upper
+
+if (!has_ccode) {
+  stop("Checkpoint 1 FALHOU: variável CCODE não encontrada (nem equivalente por capitalização).")
+}
+if (!(has_year_actual || has_year)) {
+  stop("Checkpoint 1 FALHOU: YEAR_ACTUAL/YEAR não encontrada na base.")
+}
+
+# Criar YEAR_ACTUAL quando ausente (sem descartar YEAR original)
+df_raw <- df_raw %>%
+  mutate(
+    YEAR_ACTUAL = if ("year_actual" %in% names(.)) .data$year_actual else .data$year
+  )
+
+cat("Checkpoint 1 OK: df_raw carregado, CCODE detectado e YEAR_ACTUAL disponível (original ou derivado de YEAR).\n")
+```
+
+---
+
+## Bloco 2 — Tabela de mapeamento de variáveis
+
+Objetivo: mapear conceitos do laboratório para os nomes reais da base.
+
+```{r block2-mapping}
+all_names <- names(df_raw)
+all_upper <- toupper(all_names)
+
+resolve_name <- function(expected_upper, alternatives_upper = character()) {
+  candidates <- c(expected_upper, alternatives_upper)
+  idx <- match(candidates, all_upper)
+  idx <- idx[!is.na(idx)]
+  if (length(idx) == 0) return(NA_character_)
+  all_names[idx[1]]
+}
+
+mapping_spec <- tibble::tribble(
+  ~conceito, ~nome_esperado, ~papel_no_modelo,
+  "Identificação", "CCODE", "cluster e tendência por país",
+  "Identificação", "YEAR_ACTUAL", "tendência temporal",
+  "Identificação", "COUNTRY_NAME", "rótulo/checagem",
+  "Identificação", "COUNTRY_CODE", "rótulo/checagem",
+  "Desfecho", "ANY_PRIO", "desfecho principal",
+  "Desfecho", "WAR_PRIO", "robustez mínima obrigatória",
+  "Desfecho", "ANY_PRIO_NAR", "robustez opcional (narrow)",
+  "Desfecho", "WAR_PRIO_NAR", "robustez opcional (narrow)",
+  "Endógena", "GDP_G", "endógena principal",
+  "Endógena", "GDP_G_L", "endógena principal (defasagem)",
+  "Instrumento", "GPCP_G", "instrumento principal",
+  "Instrumento", "GPCP_G_L", "instrumento principal (defasagem)",
+  "Controle", "LGDPENL1", "renda inicial (ou equivalente)",
+  "Controle", "POLITY2L", "controle político",
+  "Controle", "ETHFRAC", "controle estrutural",
+  "Controle", "RELFRAC", "controle estrutural",
+  "Controle", "OIL", "controle estrutural",
+  "Controle", "LMTNEST", "controle estrutural",
+  "Controle", "LPOPL1", "controle estrutural",
+  "Tendência", "YEAR_ACTUAL", "tendência temporal específica"
+)
+
+mapping_table <- mapping_spec %>%
+  mutate(
+    nome_na_base = case_when(
+      nome_esperado == "YEAR_ACTUAL" ~ ifelse("YEAR_ACTUAL" %in% all_names, "YEAR_ACTUAL", resolve_name("YEAR")),
+      nome_esperado == "LGDPENL1" ~ resolve_name("LGDPENL1", alternatives_upper = c("Y_0")),
+      TRUE ~ resolve_name(nome_esperado)
+    ),
+    status = if_else(!is.na(nome_na_base), "encontrada", "ausente"),
+    observacao = case_when(
+      nome_esperado == "LGDPENL1" & !is.na(nome_na_base) & toupper(nome_na_base) != "LGDPENL1" ~
+        "usando variável equivalente disponível para renda inicial",
+      nome_esperado %in% c("ANY_PRIO_NAR", "WAR_PRIO_NAR") & is.na(nome_na_base) ~
+        "robustez narrow opcional indisponível na base",
+      nome_esperado == "YEAR_ACTUAL" & nome_na_base == "year" ~
+        "YEAR_ACTUAL derivado de YEAR",
+      TRUE ~ ""
+    )
+  ) %>%
+  select(conceito, nome_na_base, papel_no_modelo, status, observacao, nome_esperado)
+
+mapping_table
+
+write_csv(mapping_table, "outputs/lab07_variable_mapping.csv")
+
+if (any(mapping_table$status == "ausente" & !mapping_table$nome_esperado %in% c("ANY_PRIO_NAR", "WAR_PRIO_NAR"))) {
+  missing_core <- mapping_table %>% filter(status == "ausente", !nome_esperado %in% c("ANY_PRIO_NAR", "WAR_PRIO_NAR"))
+  stop(
+    "Checkpoint 2 FALHOU: variáveis centrais ausentes: ",
+    paste(missing_core$nome_esperado, collapse = ", ")
+  )
+}
+
+cat("Checkpoint 2 OK: tabela de mapeamento completa.\n")
+```
+
+---
+
+## Bloco 3 — Especificação canônica do Lab07
+
+A especificação principal é:
+
+- **Desfecho:** `ANY_PRIO`
+- **Endógenas:** `GDP_G`, `GDP_G_L`
+- **Instrumentos:** `GPCP_G`, `GPCP_G_L`
+- **Controles:** renda inicial + controles político-estruturais mapeados
+- **Estrutura:** tendência temporal específica por país (`CCODE[year_trend]`) e erro clusterizado por país (`CCODE`)
+
+Além do IV principal, também serão estimados:
+
+1. benchmark OLS simples;
+2. benchmark OLS ampliado;
+3. first stage (recuperado do IV);
+4. reduced form;
+5. 2SLS principal;
+6. robustez mínima com `WAR_PRIO`.
+
+```{r block3-spec-objects}
+get_real_name <- function(expected) {
+  x <- mapping_table %>% filter(nome_esperado == expected) %>% pull(nome_na_base)
+  x[1]
+}
+
+v_id <- list(
+  ccode = get_real_name("CCODE"),
+  year_actual = get_real_name("YEAR_ACTUAL"),
+  country_name = get_real_name("COUNTRY_NAME"),
+  country_code = get_real_name("COUNTRY_CODE")
+)
+
+v_outcomes <- list(
+  any_prio = get_real_name("ANY_PRIO"),
+  war_prio = get_real_name("WAR_PRIO"),
+  any_prio_nar = get_real_name("ANY_PRIO_NAR"),
+  war_prio_nar = get_real_name("WAR_PRIO_NAR")
+)
+
+v_endog <- list(
+  gdp_g = get_real_name("GDP_G"),
+  gdp_g_l = get_real_name("GDP_G_L")
+)
+
+v_instr <- list(
+  gpcp_g = get_real_name("GPCP_G"),
+  gpcp_g_l = get_real_name("GPCP_G_L")
+)
+
+controls_map <- list(
+  lgdpenl1 = get_real_name("LGDPENL1"),
+  polity2l = get_real_name("POLITY2L"),
+  ethfrac = get_real_name("ETHFRAC"),
+  relfrac = get_real_name("RELFRAC"),
+  oil = get_real_name("OIL"),
+  lmtnest = get_real_name("LMTNEST"),
+  lpopl1 = get_real_name("LPOPL1")
+)
+
+v_controls <- unname(unlist(controls_map)) %>% unique()
+controls_map
+```
+
+---
+
+## Bloco 4 — Construção da amostra analítica (`df_main`)
+
+```{r block4-sample}
+vars_needed <- unique(c(
+  v_outcomes$any_prio,
+  v_outcomes$war_prio,
+  v_endog$gdp_g,
+  v_endog$gdp_g_l,
+  v_instr$gpcp_g,
+  v_instr$gpcp_g_l,
+  unname(unlist(controls_map)),
+  v_id$ccode,
+  v_id$year_actual,
+  v_id$country_name,
+  v_id$country_code
+))
+
+if (any(is.na(vars_needed))) {
+  stop("Checkpoint 3 FALHOU: conjunto de variáveis da amostra contém NA no mapeamento.")
+}
+
+n_initial <- nrow(df_raw)
+missing_by_var <- sapply(df_raw[, vars_needed], function(x) sum(is.na(x)))
+
+# padronização para fórmulas (mantém apenas colunas de trabalho)
+df_main <- df_raw %>%
+  transmute(
+    ccode = .data[[v_id$ccode]],
+    year_actual = .data[[v_id$year_actual]],
+    country_name = .data[[v_id$country_name]],
+    country_code = .data[[v_id$country_code]],
+    any_prio = .data[[v_outcomes$any_prio]],
+    war_prio = .data[[v_outcomes$war_prio]],
+    gdp_g = .data[[v_endog$gdp_g]],
+    gdp_g_l = .data[[v_endog$gdp_g_l]],
+    gpcp_g = .data[[v_instr$gpcp_g]],
+    gpcp_g_l = .data[[v_instr$gpcp_g_l]],
+    lgdpenl1 = .data[[controls_map$lgdpenl1]],
+    polity2l = .data[[controls_map$polity2l]],
+    ethfrac = .data[[controls_map$ethfrac]],
+    relfrac = .data[[controls_map$relfrac]],
+    oil = .data[[controls_map$oil]],
+    lmtnest = .data[[controls_map$lmtnest]],
+    lpopl1 = .data[[controls_map$lpopl1]]
+  ) %>%
+  mutate(year_trend = year_actual - min(year_actual, na.rm = TRUE)) %>%
+  drop_na()
+
+n_final <- nrow(df_main)
+
+sample_note <- tibble(
+  indicador = c("N_inicial", "N_final", "perda_total", "perda_percentual"),
+  valor = c(n_initial, n_final, n_initial - n_final, round(100 * (n_initial - n_final) / n_initial, 2))
+)
+
+sample_missing <- tibble(
+  variavel = names(missing_by_var),
+  n_missing = as.integer(missing_by_var)
+) %>% arrange(desc(n_missing))
+
+sample_note
+head(sample_missing, 15)
+
+write_csv(sample_note, "outputs/lab07_sample_note.csv")
+write_csv(sample_missing, "outputs/lab07_sample_missing_by_variable.csv")
+write_csv(df_main, "outputs/lab07_df_main.csv")
+
+if (n_final <= 0) {
+  stop("Checkpoint 3 FALHOU: amostra analítica vazia.")
+}
+
+cat("Checkpoint 3 OK: amostra analítica construída e documentada.\n")
+cat("Nota didática: tamanho amostral final deve ser comparado ao artigo; divergências podem vir de limpeza, versão de base e recodificações históricas.\n")
+```
+
+---
+
+## Bloco 5 — Estatísticas descritivas mínimas
+
+```{r block5-descriptive}
+desc_vars <- c("any_prio", "war_prio", "gdp_g", "gdp_g_l", "gpcp_g", "gpcp_g_l", "lgdpenl1", "polity2l", "ethfrac", "relfrac", "oil", "lmtnest", "lpopl1")
+
+desc_table <- df_main %>%
+  summarise(across(all_of(desc_vars), list(
+    media = ~mean(.x, na.rm = TRUE),
+    sd = ~sd(.x, na.rm = TRUE),
+    min = ~min(.x, na.rm = TRUE),
+    max = ~max(.x, na.rm = TRUE),
+    N = ~sum(!is.na(.x))
+  ))) %>%
+  pivot_longer(everything(), names_to = c("variavel", ".value"), names_sep = "_")
+
+desc_table
+write_csv(desc_table, "outputs/lab07_descriptive_stats.csv")
+```
+
+---
+
+## Bloco 6 — Benchmark OLS simples
+
+Este benchmark é **didático** e **não identifica efeito causal**.
+
+```{r block6-ols-simple}
+mod_ols_simple <- feols(any_prio ~ gdp_g + gdp_g_l, data = df_main, vcov = ~ccode)
+summary(mod_ols_simple)
+
+tidy(mod_ols_simple, conf.int = TRUE) %>%
+  write_csv("outputs/lab07_ols_simple_tidy.csv")
+```
+
+---
+
+## Bloco 7 — Benchmark OLS ampliado
+
+Inclui controles e tendência temporal específica por país via `ccode[year_trend]`, com cluster por país.
+
+```{r block7-ols-full}
+mod_ols_full <- feols(
+  any_prio ~ gdp_g + gdp_g_l + lgdpenl1 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend],
+  data = df_main,
+  vcov = ~ccode
+)
+
+summary(mod_ols_full)
+
+tidy(mod_ols_full, conf.int = TRUE) %>%
+  write_csv("outputs/lab07_ols_full_tidy.csv")
+```
+
+---
+
+## Bloco 8 — First stage (recuperado do IV principal)
+
+```{r block8-first-stage}
+mod_iv_main <- feols(
+  any_prio ~ lgdpenl1 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend] |
+    gdp_g + gdp_g_l ~ gpcp_g + gpcp_g_l,
+  data = df_main,
+  vcov = ~ccode
+)
+
+sum_iv_stage12 <- summary(mod_iv_main, stage = 1:2)
+sum_iv_stage12
+
+capture.output(sum_iv_stage12, file = "outputs/lab07_iv_stage12.txt")
+
+# checkpoint 4
+if (length(sum_iv_stage12) == 0) {
+  stop("Checkpoint 4 FALHOU: não foi possível recuperar os estágios do IV.")
+}
+cat("Checkpoint 4 OK: first stage recuperado com sucesso.\n")
+```
+
+---
+
+## Bloco 9 — Reduced form principal
+
+Reduced form não é o segundo estágio: ela resume o efeito total do instrumento sobre o desfecho.
+
+```{r block9-reduced-form}
+mod_rf_main <- feols(
+  any_prio ~ gpcp_g + gpcp_g_l + lgdpenl1 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend],
+  data = df_main,
+  vcov = ~ccode
+)
+
+summary(mod_rf_main)
+
+tidy(mod_rf_main, conf.int = TRUE) %>%
+  write_csv("outputs/lab07_reduced_form_tidy.csv")
+```
+
+---
+
+## Bloco 10 — Modelo IV / 2SLS principal
+
+```{r block10-iv-main}
+summary(mod_iv_main)
+summary(mod_iv_main, stage = 1)
+summary(mod_iv_main, stage = 2)
+
+etable(mod_iv_main, stage = 1:2)
+
+capture.output(etable(mod_iv_main, stage = 1:2), file = "outputs/lab07_iv_etable_stage12.txt")
+tidy(mod_iv_main, conf.int = TRUE) %>%
+  write_csv("outputs/lab07_iv_main_tidy.csv")
+
+# checkpoint 5
+if (length(coef(mod_iv_main)) == 0) {
+  stop("Checkpoint 5 FALHOU: modelo IV principal sem coeficientes estimados.")
+}
+cat("Checkpoint 5 OK: IV principal estimado e estágios documentados.\n")
+```
+
+---
+
+## Bloco 11 — Comparação entre modelos
+
+```{r block11-model-comparison}
+mods_main <- list(
+  "OLS simples" = mod_ols_simple,
+  "OLS ampliado" = mod_ols_full,
+  "Reduced form" = mod_rf_main,
+  "IV principal" = mod_iv_main
+)
+
+modelsummary(
+  mods_main,
+  statistic = "({std.error})",
+  output = "outputs/lab07_models_comparison.html"
+)
+
+# tabela longa para auditoria em CSV
+bind_rows(
+  tidy(mod_ols_simple, conf.int = TRUE) %>% mutate(modelo = "ols_simple"),
+  tidy(mod_ols_full, conf.int = TRUE) %>% mutate(modelo = "ols_full"),
+  tidy(mod_rf_main, conf.int = TRUE) %>% mutate(modelo = "reduced_form"),
+  tidy(mod_iv_main, conf.int = TRUE) %>% mutate(modelo = "iv_main")
+) %>%
+  write_csv("outputs/lab07_models_comparison_tidy.csv")
+```
+
+---
+
+## Bloco 12 — Robustez mínima com WAR_PRIO
+
+```{r block12-robustness-war}
+mod_iv_warprio <- feols(
+  war_prio ~ lgdpenl1 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend] |
+    gdp_g + gdp_g_l ~ gpcp_g + gpcp_g_l,
+  data = df_main,
+  vcov = ~ccode
+)
+
+summary(mod_iv_warprio)
+summary(mod_iv_warprio, stage = 1:2)
+
+capture.output(summary(mod_iv_warprio, stage = 1:2), file = "outputs/lab07_iv_warprio_stage12.txt")
+tidy(mod_iv_warprio, conf.int = TRUE) %>%
+  write_csv("outputs/lab07_iv_warprio_tidy.csv")
+
+# robustez narrow opcional
+narrow_info <- tibble::tribble(
+  ~item, ~status,
+  "ANY_PRIO_NAR", ifelse(is.na(v_outcomes$any_prio_nar), "ausente", "disponível"),
+  "WAR_PRIO_NAR", ifelse(is.na(v_outcomes$war_prio_nar), "ausente", "disponível")
+)
+
+narrow_info
+write_csv(narrow_info, "outputs/lab07_narrow_availability.csv")
+```
+
+---
+
+## Bloco 13 — Diagnóstico substantivo e notas pedagógicas
+
+- OLS simples e ampliado são benchmarks associativos: não resolvem simultaneidade, variável omitida e erro de mensuração da renda.
+- O first stage é central porque identifica o quanto os instrumentos (`GPCP_G`, `GPCP_G_L`) explicam as variáveis endógenas (`GDP_G`, `GDP_G_L`).
+- Instrumento fraco deve ser reportado, não ocultado.
+- A hipótese de exclusão continua substantiva: chuva deve afetar conflito principalmente via crescimento, não por canais diretos não modelados.
+- O parâmetro IV é local (LATE), condicionado ao subgrupo afetado pelos instrumentos.
+- `NDVI` não foi usado como instrumento principal porque o núcleo canônico do laboratório segue a estratégia central de chuva (`GPCP`) na replicação de referência.
+- Robustez com definições narrow é extensão opcional e não parte do núcleo mínimo obrigatório nesta fase.
+
+```{r block13-write-notes}
+ped_note <- c(
+  "OLS não identifica causalidade por endogeneidade de crescimento.",
+  "First stage documenta relevância empírica do instrumento.",
+  "Exclusão é hipótese substantiva, não testável plenamente no desenho principal.",
+  "Efeito IV é local (LATE).",
+  "NDVI não integra o núcleo instrumental deste Lab07.",
+  "Narrow robustness é extensão opcional."
+)
+write_lines(ped_note, "outputs/lab07_pedagogical_notes.txt")
+```
+
+---
+
+## Bloco 14 — Outputs obrigatórios e registro de sessão
+
+```{r block14-outputs-session}
+# Lista sintética dos outputs gerados
+outputs_generated <- tibble(
+  output = c(
+    "docs/lab07_mss2004_iv.Rmd",
+    "outputs/lab07_variable_mapping.csv",
+    "outputs/lab07_descriptive_stats.csv",
+    "outputs/lab07_ols_simple_tidy.csv",
+    "outputs/lab07_ols_full_tidy.csv",
+    "outputs/lab07_reduced_form_tidy.csv",
+    "outputs/lab07_iv_main_tidy.csv",
+    "outputs/lab07_iv_stage12.txt",
+    "outputs/lab07_iv_etable_stage12.txt",
+    "outputs/lab07_iv_warprio_tidy.csv",
+    "outputs/lab07_sample_note.csv",
+    "outputs/lab07_file_existence_check.csv",
+    "outputs/lab07_models_comparison.html",
+    "outputs/lab07_models_comparison_tidy.csv",
+    "outputs/lab07_narrow_availability.csv",
+    "outputs/lab07_pedagogical_notes.txt"
+  )
+)
+
+outputs_generated
+write_csv(outputs_generated, "outputs/lab07_outputs_manifest.csv")
+
+capture.output(sessionInfo(), file = "outputs/lab07_session_info.txt")
+```
+
+---
+
+## Bloco 15 — Regras de erro e parada
+
+Este documento segue a regra: quando um checkpoint falha, interrompe a execução com `stop()` e registra o erro no log da renderização.
+
+---
+
+## Bloco 16 — Fechamento da execução
+
+Ao final desta execução, uma nota de handoff é salva em `docs/lab07_handoff_2026-03-27.md`.

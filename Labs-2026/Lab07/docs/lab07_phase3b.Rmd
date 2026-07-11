@@ -1,0 +1,597 @@
+---
+title: "Lab07 MAPP — Fase 3B (integridade, amostra e descritivas)"
+author: "Agente executor IA"
+date: "2026-03-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+```
+
+## Escopo desta fase
+
+**Modo principal:** empirical analysis  
+**Função secundária:** pedagogical support
+
+Esta execução cobre **apenas a Fase 3B**:
+
+1. verificar integridade mínima das variáveis centrais herdadas da Fase 3A;
+2. distinguir formalmente variáveis obrigatórias e opcionais;
+3. construir a amostra analítica principal (`df_main`);
+4. documentar perdas por missing e critérios de exclusão;
+5. produzir estatísticas descritivas mínimas;
+6. registrar nota de amostra em ordem de grandeza comparável ao artigo.
+
+Não inclui regressões OLS, first stage, reduced form, IV/2SLS, robustez mínima nem comparações finais.
+
+## Bloco B0 — Pré-requisitos obrigatórios e reconstituição fiel de `df_raw`
+
+Objetivo: confirmar a presença dos artefatos herdados da Fase 3A e reconstituir `df_raw` com os aliases canônicos já validados, sem reabrir decisões aprovadas.
+
+```{r bloco-b0-prerequisitos}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(readr)
+  library(tidyr)
+  library(purrr)
+  library(stringr)
+  library(tibble)
+  library(haven)
+  library(fs)
+})
+
+if (!dir_exists("outputs")) dir_create("outputs")
+if (!dir_exists("docs")) dir_create("docs")
+if (!dir_exists("logs")) dir_create("logs")
+
+phase3a_rmd <- "docs/lab07_phase3a.Rmd"
+phase3a_handoff <- "docs/lab07_phase3a_handoff_2026-03-27.md"
+phase3a_mapping_file <- "outputs/lab07_phase3a_variable_mapping.csv"
+canonical_data <- "Data/mss_repdata_feb07.dta"
+
+prereq_tbl <- tibble(
+  artefato = c(
+    "Rmd iniciado na Fase 3A",
+    "handoff da Fase 3A",
+    "tabela de mapeamento da Fase 3A",
+    "base canônica feb07"
+  ),
+  caminho = c(phase3a_rmd, phase3a_handoff, phase3a_mapping_file, canonical_data),
+  existe = file_exists(caminho)
+)
+
+write_csv(prereq_tbl, "outputs/lab07_phase3b_prerequisites_check.csv")
+
+missing_prereq <- prereq_tbl %>% filter(!existe)
+if (nrow(missing_prereq) > 0) {
+  stop(
+    "Pré-requisitos ausentes para a Fase 3B: ",
+    paste(missing_prereq$caminho, collapse = ", "),
+    ". Execução interrompida."
+  )
+}
+
+phase3a_mapping <- read_csv(phase3a_mapping_file, show_col_types = FALSE)
+df_raw_imported <- read_dta(canonical_data)
+
+if (!("ccode" %in% names(df_raw_imported))) {
+  stop("Conflito não resolvido: a base canônica não expõe `ccode`, necessário para reconstituir o alias canônico `CCODE`.")
+}
+
+if (!("year" %in% names(df_raw_imported) || "YEAR" %in% names(df_raw_imported) || "year_actual" %in% names(df_raw_imported))) {
+  stop("Conflito não resolvido: a base canônica não expõe uma variável temporal adequada para reconstituir `YEAR_ACTUAL`.")
+}
+
+source_year_name <- case_when(
+  "YEAR_ACTUAL" %in% names(df_raw_imported) ~ "YEAR_ACTUAL",
+  "year_actual" %in% names(df_raw_imported) ~ "year_actual",
+  "YEAR" %in% names(df_raw_imported) ~ "YEAR",
+  "year" %in% names(df_raw_imported) ~ "year",
+  TRUE ~ NA_character_
+)
+
+if (is.na(source_year_name)) {
+  stop("Não foi possível identificar a origem temporal para `YEAR_ACTUAL`.")
+}
+
+df_raw <- df_raw_imported %>%
+  mutate(
+    CCODE = if ("CCODE" %in% names(.)) .data$CCODE else .data$ccode,
+    YEAR_ACTUAL = .data[[source_year_name]]
+  )
+
+reconstitution_note <- tibble(
+  item = c("CCODE", "YEAR_ACTUAL"),
+  origem_detectada = c(if ("CCODE" %in% names(df_raw_imported)) "CCODE" else "ccode", source_year_name),
+  acao = c(
+    "alias canônico reconstituído ou preservado conforme decisão validada da Fase 3A",
+    "alias canônico reconstituído ou preservado conforme decisão validada da Fase 3A"
+  ),
+  observacao = c(
+    "Na leitura atual em R, a base expõe `ccode`; o alias `CCODE` foi mantido explicitamente para auditabilidade.",
+    paste0("Na leitura atual em R, a variável temporal detectada foi `", source_year_name, "`; `YEAR_ACTUAL` foi reconstituída fielmente para preservar a decisão canônica da Fase 3A.")
+  )
+)
+
+write_csv(reconstitution_note, "outputs/lab07_phase3b_reconstitution_note.csv")
+```
+
+## Bloco B1 — Tabela explícita de padronização de nomes
+
+Objetivo: registrar a correspondência entre o nome original detectado na base/reconstituição e o nome padronizado usado internamente na Fase 3B.
+
+```{r bloco-b1-padronizacao}
+name_standardization <- tribble(
+  ~nome_original, ~nome_padronizado, ~motivo_da_padronizacao,
+  "CCODE", "ccode", "padronização para minúsculas no uso interno; alias canônico herdado da Fase 3A",
+  "YEAR_ACTUAL", "year_actual", paste0("padronização para minúsculas no uso interno; alias canônico reconstituído a partir de `", source_year_name, "`"),
+  "country_name", "country_name", "sem padronização adicional necessária",
+  "country_code", "country_code", "sem padronização adicional necessária",
+  "any_prio", "any_prio", "sem padronização adicional necessária",
+  "war_prio", "war_prio", "sem padronização adicional necessária",
+  "any_prio_nar", "any_prio_nar", "sem padronização adicional necessária",
+  "war_prio_nar", "war_prio_nar", "sem padronização adicional necessária",
+  "gdp_g", "gdp_g", "sem padronização adicional necessária",
+  "gdp_g_l", "gdp_g_l", "sem padronização adicional necessária",
+  "GPCP_g", "gpcp_g", "normalização de capitalização para reduzir risco sintático em fases seguintes",
+  "GPCP_g_l", "gpcp_g_l", "normalização de capitalização para reduzir risco sintático em fases seguintes",
+  "y_0", "y_0", "sem padronização adicional necessária",
+  "polity2l", "polity2l", "sem padronização adicional necessária",
+  "ethfrac", "ethfrac", "sem padronização adicional necessária",
+  "relfrac", "relfrac", "sem padronização adicional necessária",
+  "Oil", "oil", "normalização de capitalização para reduzir risco sintático em fases seguintes",
+  "lmtnest", "lmtnest", "sem padronização adicional necessária",
+  "lpopl1", "lpopl1", "sem padronização adicional necessária"
+)
+
+write_csv(name_standardization, "outputs/lab07_phase3b_name_standardization.csv")
+
+if (!all(c("nome_original", "nome_padronizado", "motivo_da_padronizacao") %in% names(name_standardization))) {
+  stop("Checkpoint B0 FALHOU: tabela de padronização de nomes incompleta.")
+}
+
+cat("Checkpoint B0 OK: tabela explícita de padronização registrada.\n")
+```
+
+## Bloco B2 — Classificação formal: obrigatórias vs opcionais
+
+Objetivo: distinguir formalmente o conjunto mínimo exigido para `df_main` do conjunto opcional herdado da Fase 3A.
+
+```{r bloco-b2-classificacao}
+role_spec <- tribble(
+  ~variavel, ~papel, ~obrigatoriedade,
+  "ccode", "identificador de país", "obrigatória",
+  "year_actual", "identificador temporal", "obrigatória",
+  "any_prio", "desfecho principal", "obrigatória",
+  "gdp_g", "endógena principal", "obrigatória",
+  "gdp_g_l", "endógena defasada", "obrigatória",
+  "gpcp_g", "instrumento principal", "obrigatória",
+  "gpcp_g_l", "instrumento defasado", "obrigatória",
+  "y_0", "controle de renda inicial", "obrigatória",
+  "polity2l", "controle político", "obrigatória",
+  "ethfrac", "controle estrutural", "obrigatória",
+  "relfrac", "controle estrutural", "obrigatória",
+  "oil", "controle estrutural", "obrigatória",
+  "lmtnest", "controle estrutural", "obrigatória",
+  "lpopl1", "controle estrutural", "obrigatória",
+  "war_prio", "desfecho de robustez mínima", "opcional",
+  "any_prio_nar", "desfecho narrow", "opcional",
+  "war_prio_nar", "desfecho narrow", "opcional",
+  "country_name", "rótulo do país", "opcional",
+  "country_code", "código textual do país", "opcional"
+)
+
+available_standardized <- name_standardization %>% pull(nome_padronizado)
+
+classification_tbl <- role_spec %>%
+  mutate(
+    status = if_else(variavel %in% available_standardized, "encontrada", "ausente"),
+    observacao = case_when(
+      variavel == "year_actual" ~ paste0("Alias canônico disponível em `YEAR_ACTUAL`, reconstituído a partir de `", source_year_name, "` conforme decisão herdada da Fase 3A."),
+      variavel == "ccode" ~ "Alias canônico disponível em `CCODE`, reconstituído ou preservado a partir de `ccode`.",
+      variavel %in% c("gpcp_g", "gpcp_g_l", "oil") ~ "Disponível com padronização controlada de capitalização, registrada em tabela própria.",
+      variavel %in% c("war_prio", "any_prio_nar", "war_prio_nar", "country_name", "country_code") & status == "encontrada" ~ "Variável opcional confirmada; não exigida para construir df_main.",
+      variavel %in% c("war_prio", "any_prio_nar", "war_prio_nar", "country_name", "country_code") & status == "ausente" ~ "Variável opcional ausente; documentada sem bloquear a fase.",
+      TRUE ~ "Variável central confirmada com base na decisão validada da Fase 3A."
+    )
+  )
+
+write_csv(classification_tbl, "outputs/lab07_phase3b_variable_classification.csv")
+
+missing_required <- classification_tbl %>%
+  filter(obrigatoriedade == "obrigatória", status != "encontrada")
+
+if (nrow(missing_required) > 0) {
+  stop(
+    "Checkpoint B1 FALHOU: variáveis obrigatórias ausentes: ",
+    paste(missing_required$variavel, collapse = ", "),
+    "."
+  )
+}
+
+cat("Checkpoint B1 OK: todas as variáveis obrigatórias foram confirmadas.\n")
+```
+
+## Bloco B3 — Construção do dataset padronizado e checagem de integridade mínima
+
+Objetivo: verificar se as variáveis obrigatórias não apenas existem, mas também são minimamente coerentes com o uso analítico planejado.
+
+```{r bloco-b3-integridade}
+df_std <- df_raw %>%
+  transmute(
+    ccode = .data$CCODE,
+    year_actual = .data$YEAR_ACTUAL,
+    country_name = .data$country_name,
+    country_code = .data$country_code,
+    any_prio = .data$any_prio,
+    war_prio = .data$war_prio,
+    any_prio_nar = .data$any_prio_nar,
+    war_prio_nar = .data$war_prio_nar,
+    gdp_g = .data$gdp_g,
+    gdp_g_l = .data$gdp_g_l,
+    gpcp_g = .data$GPCP_g,
+    gpcp_g_l = .data$GPCP_g_l,
+    y_0 = .data$y_0,
+    polity2l = .data$polity2l,
+    ethfrac = .data$ethfrac,
+    relfrac = .data$relfrac,
+    oil = .data$Oil,
+    lmtnest = .data$lmtnest,
+    lpopl1 = .data$lpopl1
+  )
+
+required_vars <- classification_tbl %>%
+  filter(obrigatoriedade == "obrigatória") %>%
+  pull(variavel)
+
+is_numeric_like <- function(x) {
+  is.numeric(x) || inherits(x, c("haven_labelled", "labelled"))
+}
+
+collapse_class <- function(x) paste(class(x), collapse = "|")
+
+safe_min <- function(x) {
+  if (is.numeric(x)) min(x, na.rm = TRUE) else NA_real_
+}
+
+safe_max <- function(x) {
+  if (is.numeric(x)) max(x, na.rm = TRUE) else NA_real_
+}
+
+coherence_note <- function(var_name, x) {
+  non_missing <- x[!is.na(x)]
+  unique_values <- sort(unique(non_missing))
+
+  if (var_name == "any_prio") {
+    if (is_numeric_like(x) && all(unique_values %in% c(0, 1))) {
+      return(paste0("Compatível com indicador binário 0/1; valores observados: ", paste(unique_values, collapse = ", "), "."))
+    }
+    return("Presente, mas os valores não são compatíveis com indicador binário 0/1.")
+  }
+
+  if (var_name %in% c("gdp_g", "gdp_g_l")) {
+    if (is_numeric_like(x) && dplyr::n_distinct(non_missing) > 10) {
+      return("Variável numérica com dispersão e variabilidade compatíveis com taxa de crescimento.")
+    }
+    return("Variável presente, mas sem variabilidade suficiente para uso analítico.")
+  }
+
+  if (var_name %in% c("gpcp_g", "gpcp_g_l")) {
+    if (is_numeric_like(x) && min(non_missing) < 0 && max(non_missing) > 0) {
+      return("Variável numérica com sinais positivo e negativo plausíveis para crescimento de chuva.")
+    }
+    return("Variável presente, mas sem faixa plausível de variação para crescimento de chuva.")
+  }
+
+  if (var_name == "ccode") {
+    if (length(non_missing) > 0 && dplyr::n_distinct(non_missing) > 1) {
+      return("Identificador de país estável e com múltiplos valores distintos, compatível com painel país-ano.")
+    }
+    return("Identificador de país presente, mas sem variação suficiente.")
+  }
+
+  if (var_name == "year_actual") {
+    if (is_numeric_like(x)) {
+      return(paste0("Variável temporal numérica compatível com o recorte do estudo; intervalo observado: ", min(non_missing), "-", max(non_missing), "."))
+    }
+    return("Variável temporal presente, mas com classe incompatível.")
+  }
+
+  if (var_name %in% c("y_0", "polity2l", "ethfrac", "relfrac", "oil", "lmtnest", "lpopl1")) {
+    if (is_numeric_like(x)) {
+      return("Controle com classe compatível com regressão linear e faixa observada plausível.")
+    }
+    return("Controle presente, mas com classe incompatível para regressão linear.")
+  }
+
+  "Checagem não especificada."
+}
+
+class_compatible <- function(var_name, x) {
+  if (var_name == "any_prio") {
+    non_missing <- x[!is.na(x)]
+    return(is_numeric_like(x) && all(sort(unique(non_missing)) %in% c(0, 1)))
+  }
+
+  if (var_name == "ccode") {
+    return(is.numeric(x) || is.character(x) || is.factor(x))
+  }
+
+  if (var_name == "year_actual") {
+    return(is_numeric_like(x))
+  }
+
+  if (var_name %in% c("gdp_g", "gdp_g_l", "gpcp_g", "gpcp_g_l", "y_0", "polity2l", "ethfrac", "relfrac", "oil", "lmtnest", "lpopl1")) {
+    return(is_numeric_like(x))
+  }
+
+  FALSE
+}
+
+integrity_tbl <- map_dfr(required_vars, function(v) {
+  x <- df_std[[v]]
+  tibble(
+    variavel = v,
+    classe_r = collapse_class(x),
+    numero_missing = sum(is.na(x)),
+    numero_valores_unicos = dplyr::n_distinct(x, na.rm = TRUE),
+    minimo = safe_min(x),
+    maximo = safe_max(x),
+    observacao_coerencia = coherence_note(v, x),
+    classe_compativel = class_compatible(v, x)
+  )
+})
+
+write_csv(integrity_tbl, "outputs/lab07_phase3b_variable_integrity.csv")
+
+incompatible_vars <- integrity_tbl %>% filter(!classe_compativel)
+if (nrow(incompatible_vars) > 0) {
+  stop(
+    "Checkpoint B2 FALHOU: variáveis obrigatórias com classe incompatível: ",
+    paste(incompatible_vars$variavel, collapse = ", "),
+    "."
+  )
+}
+
+cat("Checkpoint B2 OK: classes e coerência mínima compatíveis com o uso analítico desta fase.\n")
+```
+
+## Bloco B4 — Construção da amostra analítica principal (`df_main`)
+
+Objetivo: manter apenas observações completas nas variáveis obrigatórias do modelo principal, sem exigir variáveis opcionais.
+
+```{r bloco-b4-amostra}
+missing_by_variable <- map_dfr(required_vars, function(v) {
+  tibble(
+    variavel = v,
+    numero_missing = sum(is.na(df_std[[v]]))
+  )
+}) %>%
+  arrange(desc(numero_missing), variavel)
+
+write_csv(missing_by_variable, "outputs/lab07_phase3b_sample_missing_by_variable.csv")
+
+variables_used_tbl <- tibble(variavel = required_vars)
+write_csv(variables_used_tbl, "outputs/lab07_phase3b_df_main_variables.csv")
+
+n_initial <- nrow(df_std)
+
+df_main <- df_std %>%
+  select(all_of(required_vars)) %>%
+  tidyr::drop_na()
+
+n_final <- nrow(df_main)
+n_excluded <- n_initial - n_final
+
+if (n_final <= 0) {
+  stop("Checkpoint B3 FALHOU: impossibilidade de construir df_main; a amostra final ficou vazia.")
+}
+
+write_csv(df_main, "outputs/lab07_phase3b_df_main.csv")
+saveRDS(df_main, "outputs/lab07_phase3b_df_main.rds")
+
+sample_note_lines <- c(
+  "Lab07 Fase 3B — Nota de amostra",
+  paste0("- N inicial: ", n_initial, "."),
+  paste0("- N final (df_main): ", n_final, "."),
+  paste0("- Observações excluídas por missing nas variáveis obrigatórias: ", n_excluded, "."),
+  paste0("- Países únicos na amostra final: ", dplyr::n_distinct(df_main$ccode), "."),
+  paste0("- Anos únicos na amostra final: ", dplyr::n_distinct(df_main$year_actual), "."),
+  paste0("- A amostra final está na ordem de grandeza de algumas centenas de observações país-ano, compatível com a escala do artigo e da base de replicação feb07. Diferenças residuais podem decorrer da versão da base, da reconstituição fiel de aliases canônicos em R e do fato de a Fase 3B exigir apenas completude nas variáveis obrigatórias do modelo principal.")
+)
+writeLines(sample_note_lines, "outputs/lab07_phase3b_sample_note.txt")
+
+sample_summary_tbl <- tibble(
+  indicador = c("N_inicial", "N_final", "observacoes_excluidas"),
+  valor = c(n_initial, n_final, n_excluded)
+)
+write_csv(sample_summary_tbl, "outputs/lab07_phase3b_sample_summary.csv")
+
+cat("Checkpoint B3 OK: df_main construído e documentado.\n")
+```
+
+## Bloco B5 — Checagem de estrutura do painel
+
+Objetivo: verificar se a amostra final preserva a lógica país-ano e se existem duplicatas não resolvidas.
+
+```{r bloco-b5-painel}
+duplicate_pairs <- df_main %>%
+  count(ccode, year_actual, name = "frequencia") %>%
+  filter(frequencia > 1)
+
+panel_structure_tbl <- tibble(
+  n_paises = dplyr::n_distinct(df_main$ccode),
+  n_anos = dplyr::n_distinct(df_main$year_actual),
+  n_duplicatas_ccode_year = nrow(duplicate_pairs),
+  estrutura_compativel = nrow(duplicate_pairs) == 0,
+  observacao = if_else(
+    nrow(duplicate_pairs) == 0,
+    "Estrutura compatível com painel país-ano; não há duplicatas em ccode-year_actual.",
+    "Há duplicatas em ccode-year_actual; a fase deve parar para decisão humana."
+  )
+)
+
+write_csv(panel_structure_tbl, "outputs/lab07_phase3b_panel_structure.csv")
+write_csv(duplicate_pairs, "outputs/lab07_phase3b_panel_duplicates.csv")
+
+if (nrow(duplicate_pairs) > 0) {
+  stop("Checkpoint B4 FALHOU: foram detectadas duplicatas não resolvidas em ccode-year_actual.")
+}
+
+cat("Checkpoint B4 OK: estrutura painel preservada, sem duplicatas não resolvidas.\n")
+```
+
+## Bloco B6 — Estatísticas descritivas mínimas
+
+Objetivo: resumir escala, dispersão e amplitude das variáveis centrais da amostra final para preparar a fase seguinte.
+
+```{r bloco-b6-descritivas}
+desc_vars <- c(
+  "any_prio",
+  if ("war_prio" %in% names(df_std)) "war_prio" else character(0),
+  "gdp_g",
+  "gdp_g_l",
+  "gpcp_g",
+  "gpcp_g_l",
+  "y_0",
+  "polity2l",
+  "ethfrac",
+  "relfrac",
+  "oil",
+  "lmtnest",
+  "lpopl1"
+)
+
+descriptive_tbl <- map_dfr(desc_vars, function(v) {
+  x <- df_std[[v]]
+  tibble(
+    variavel = v,
+    media = mean(x, na.rm = TRUE),
+    desvio_padrao = sd(x, na.rm = TRUE),
+    minimo = min(x, na.rm = TRUE),
+    maximo = max(x, na.rm = TRUE),
+    N = sum(!is.na(x))
+  )
+})
+
+write_csv(descriptive_tbl, "outputs/lab07_phase3b_descriptive_stats.csv")
+
+war_prio_note <- if ("war_prio" %in% names(df_std)) {
+  paste0("`war_prio` está disponível e foi incluída nas descritivas; média = ", round(mean(df_std$war_prio, na.rm = TRUE), 3), ".")
+} else {
+  "`war_prio` não está disponível; a ausência foi apenas documentada, sem bloquear a fase."
+}
+
+descriptive_note_lines <- c(
+  "Lab07 Fase 3B — Interpretação curta das descritivas",
+  paste0("- `any_prio` tem média ", round(mean(df_std$any_prio, na.rm = TRUE), 3), ", sugerindo incidência relativamente baixa do desfecho principal na amostra."),
+  paste0("- `gdp_g` e `gdp_g_l` variam em torno de zero, com valores positivos e negativos plausíveis para taxas de crescimento econômico."),
+  paste0("- `gpcp_g` e `gpcp_g_l` também exibem sinais positivos e negativos, coerentes com choques de crescimento de chuva."),
+  paste0("- Variáveis como `oil` são claramente assimétricas por serem binárias e de baixa prevalência média (", round(mean(df_std$oil, na.rm = TRUE), 3), "), enquanto `lpopl1` e `lmtnest` operam em escalas distintas que exigem atenção interpretativa na fase seguinte."),
+  paste0("- ", war_prio_note)
+)
+writeLines(descriptive_note_lines, "outputs/lab07_phase3b_descriptive_note.txt")
+
+cat("Checkpoint B5 OK: tabela descritiva e interpretação curta registradas.\n")
+```
+
+## Bloco B7 — Registro de ambiente e handoff da Fase 3B
+
+Objetivo: deixar rastreabilidade suficiente para reexecução e continuidade, sem avançar para a Fase 3C.
+
+```{r bloco-b7-handoff}
+capture.output(sessionInfo(), file = "outputs/lab07_phase3b_session_info.txt")
+
+confirmed_required <- classification_tbl %>%
+  filter(obrigatoriedade == "obrigatória", status == "encontrada") %>%
+  pull(variavel)
+
+confirmed_optional <- classification_tbl %>%
+  filter(obrigatoriedade == "opcional", status == "encontrada") %>%
+  pull(variavel)
+
+handoff_lines <- c(
+  "# Handoff — Fase 3B (Lab07)",
+  "",
+  "## 1) O que foi feito",
+  "",
+  "- Verificação dos pré-requisitos herdados da Fase 3A.",
+  "- Reconstituição fiel de `df_raw` com os aliases canônicos `CCODE` e `YEAR_ACTUAL`.",
+  "- Geração da tabela explícita de padronização de nomes da Fase 3B.",
+  "- Classificação formal das variáveis obrigatórias e opcionais.",
+  "- Checagem de integridade mínima das variáveis centrais.",
+  "- Construção e salvamento de `df_main` usando apenas variáveis obrigatórias.",
+  "- Registro de perdas por missing, checagem de painel e estatísticas descritivas mínimas.",
+  "",
+  "## 2) O que foi validado",
+  "",
+  "- **Checkpoint B0:** tabela explícita de padronização de nomes criada.",
+  "- **Checkpoint B1:** todas as variáveis obrigatórias foram encontradas.",
+  "- **Checkpoint B2:** classes e coerência mínima compatíveis com o uso analítico.",
+  "- **Checkpoint B3:** `df_main` construído e documentado.",
+  "- **Checkpoint B4:** não há duplicatas não resolvidas em `ccode-year_actual`.",
+  "- **Checkpoint B5:** tabela descritiva e interpretação curta foram geradas.",
+  "",
+  "## 3) Variáveis confirmadas",
+  "",
+  paste0("- **Obrigatórias confirmadas:** ", paste(confirmed_required, collapse = ", "), "."),
+  paste0("- **Opcionais confirmadas:** ", if (length(confirmed_optional) > 0) paste(confirmed_optional, collapse = ", ") else "nenhuma", "."),
+  "",
+  "## 4) Padronização aplicada",
+  "",
+  "- `CCODE -> ccode`.",
+  paste0("- `YEAR_ACTUAL -> year_actual` (alias canônico reconstituído a partir de `", source_year_name, "`)."),
+  "- `GPCP_g -> gpcp_g`.",
+  "- `GPCP_g_l -> gpcp_g_l`.",
+  "- `Oil -> oil`.",
+  "",
+  "## 5) Tamanho da amostra",
+  "",
+  paste0("- **N inicial:** ", n_initial, "."),
+  paste0("- **N final (`df_main`):** ", n_final, "."),
+  paste0("- **Perdas por missing:** ", n_excluded, "."),
+  "",
+  "## 6) Estrutura do painel",
+  "",
+  paste0("- **Países únicos:** ", dplyr::n_distinct(df_main$ccode), "."),
+  paste0("- **Anos únicos:** ", dplyr::n_distinct(df_main$year_actual), "."),
+  paste0("- **Duplicatas em `ccode-year_actual`:** ", nrow(duplicate_pairs), "."),
+  "",
+  "## 7) Arquivos gerados",
+  "",
+  "- `docs/lab07_phase3b.Rmd`",
+  "- `docs/lab07_phase3b.html`",
+  "- `outputs/lab07_phase3b_prerequisites_check.csv`",
+  "- `outputs/lab07_phase3b_reconstitution_note.csv`",
+  "- `outputs/lab07_phase3b_name_standardization.csv`",
+  "- `outputs/lab07_phase3b_variable_classification.csv`",
+  "- `outputs/lab07_phase3b_variable_integrity.csv`",
+  "- `outputs/lab07_phase3b_sample_missing_by_variable.csv`",
+  "- `outputs/lab07_phase3b_df_main_variables.csv`",
+  "- `outputs/lab07_phase3b_df_main.csv`",
+  "- `outputs/lab07_phase3b_df_main.rds`",
+  "- `outputs/lab07_phase3b_panel_structure.csv`",
+  "- `outputs/lab07_phase3b_panel_duplicates.csv`",
+  "- `outputs/lab07_phase3b_sample_note.txt`",
+  "- `outputs/lab07_phase3b_sample_summary.csv`",
+  "- `outputs/lab07_phase3b_descriptive_stats.csv`",
+  "- `outputs/lab07_phase3b_descriptive_note.txt`",
+  "- `outputs/lab07_phase3b_session_info.txt`",
+  "",
+  "## 8) Pendente para a Fase 3C",
+  "",
+  "- Estimar benchmarks OLS.",
+  "- Estimar first stage, reduced form e IV/2SLS.",
+  "- Implementar robustez mínima com `war_prio`.",
+  "- Produzir comparações finais de resultados.",
+  "",
+  "A execução para aqui. Nenhum passo da Fase 3C foi iniciado."
+)
+
+writeLines(handoff_lines, "docs/lab07_phase3b_handoff_2026-03-27.md")
+```

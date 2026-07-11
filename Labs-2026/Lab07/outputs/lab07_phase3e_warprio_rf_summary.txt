@@ -1,0 +1,17 @@
+OLS estimation, Dep. Var.: war_prio
+Observations: 743
+Fixed-effects: ccode: 41
+Varying slopes: year_trend (ccode): 41
+Standard-errors: Clustered (ccode) 
+          Estimate Std. Error   t value Pr(>|t|)    
+gpcp_g   -0.056593   0.028150 -2.010393 0.051166 .  
+gpcp_g_l -0.056629   0.028103 -2.015037 0.050656 .  
+polity2l  0.000120   0.004220  0.028479 0.977422    
+oil       0.018686   0.023292  0.802230 0.427160    
+lpopl1    1.113552   0.593728  1.875526 0.068033 .  
+... 4 variables were removed because of collinearity (y_0, ethfrac and 2
+others [full set in $collin.var])
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+RMSE: 0.202986     Adj. R2: 0.664806
+                 Within R2: 0.019944

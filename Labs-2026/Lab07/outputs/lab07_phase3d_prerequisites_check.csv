@@ -1,0 +1,6 @@
+artefato,caminho,existe
+df_main validado na Fase 3B,outputs/lab07_phase3b_df_main.rds,TRUE
+outputs OLS validados da Fase 3C,outputs/lab07_phase3c_ols_comparison_tidy.csv,TRUE
+tabela de padronização da Fase 3B,outputs/lab07_phase3b_name_standardization.csv,TRUE
+README.md na raiz,README.md,TRUE
+artefato principal até a Fase 3C,docs/lab07_phase3c.Rmd,TRUE

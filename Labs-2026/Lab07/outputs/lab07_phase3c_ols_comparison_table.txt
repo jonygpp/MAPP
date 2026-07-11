@@ -1,0 +1,18 @@
+		mod_ols_simple	mod_ols_full
+1	Dependent Var.:	any_prio	any_prio
+2	 	 	 
+3	Constant	0.2660*** (0.0520)	  
+4	gdp_g	-0.3094 (0.2753)	-0.1737 (0.1443)
+5	gdp_g_l	-0.0727 (0.2531)	0.0992 (0.1683)
+6	polity2l	  	0.0003 (0.0044)
+7	oil	  	0.0680 (0.0441)
+8	lpopl1	  	0.8055 (0.7077)
+9	Fixed-Effects:	------------------	----------------
+10	ccode	No	Yes
+11	Varying Slopes:	------------------	----------------
+12	year_trend (ccode)	No	Yes
+13	__________________	__________________	________________
+14	S.E.: Clustered	by: ccode	by: ccode
+15	Observations	743	743
+16	R2	0.00261	0.70849
+17	Within R2	--	0.00996

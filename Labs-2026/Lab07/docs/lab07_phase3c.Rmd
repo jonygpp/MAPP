@@ -1,0 +1,451 @@
+---
+title: "Lab07 MAPP — Fase 3C (benchmarks OLS e atualização do README)"
+author: "Agente executor IA"
+date: "2026-03-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+```
+
+## Escopo da fase
+
+**Modo principal:** empirical analysis  
+**Sequência secundária:** project integration (atualização de README e handoff)
+
+Esta fase executa apenas:
+
+1. verificação de consistência com a Fase 3B;
+2. estimação dos benchmarks `mod_ols_simple` e `mod_ols_full`;
+3. interpretação didática curta (associação vs causalidade);
+4. criação/atualização obrigatória do `README.md` na raiz;
+5. geração de handoff da Fase 3C.
+
+Não inclui first stage, reduced form, IV/2SLS, robustez com `war_prio` nem comparação final com IV.
+
+## Bloco C0 — Pré-requisitos obrigatórios
+
+```{r bloco-c0-prerequisitos}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(readr)
+  library(tidyr)
+  library(tibble)
+  library(stringr)
+  library(purrr)
+  library(fixest)
+  library(broom)
+  library(fs)
+})
+
+if (!dir_exists("outputs")) dir_create("outputs")
+if (!dir_exists("docs")) dir_create("docs")
+if (!dir_exists("logs")) dir_create("logs")
+
+prereq_tbl <- tibble(
+  artefato = c(
+    "df_main validado da Fase 3B",
+    "tabela de padronização da Fase 3B",
+    "tabela obrigatório/opcional da Fase 3B",
+    "handoff da Fase 3B",
+    "artefato principal iniciado na Fase 3B"
+  ),
+  caminho = c(
+    "outputs/lab07_phase3b_df_main.rds",
+    "outputs/lab07_phase3b_name_standardization.csv",
+    "outputs/lab07_phase3b_variable_classification.csv",
+    "docs/lab07_phase3b_handoff_2026-03-27.md",
+    "docs/lab07_phase3b.Rmd"
+  ),
+  existe = file_exists(caminho)
+)
+
+write_csv(prereq_tbl, "outputs/lab07_phase3c_prerequisites_check.csv")
+
+missing_prereq <- prereq_tbl %>% filter(!existe)
+if (nrow(missing_prereq) > 0) {
+  stop(
+    "Pré-requisitos ausentes na Fase 3C: ",
+    paste(missing_prereq$caminho, collapse = ", "),
+    ". Execução interrompida."
+  )
+}
+
+if (!file_exists("docs/lab07_phase3b_handoff_2026-03-27.md")) {
+  stop("Pré-requisito crítico ausente: handoff da Fase 3B não encontrado.")
+}
+
+# Estado do README antes da fase
+readme_exists_before <- file_exists("README.md")
+readme_state <- tibble(
+  readme_existia_antes_da_fase = readme_exists_before,
+  acao_planejada = if_else(readme_exists_before, "atualizar", "criar")
+)
+write_csv(readme_state, "outputs/lab07_phase3c_readme_state_before.csv")
+```
+
+## Bloco C1 — Consistência explícita com a amostra validada da Fase 3B
+
+```{r bloco-c1-consistencia}
+df_main <- readRDS("outputs/lab07_phase3b_df_main.rds")
+name_standardization <- read_csv("outputs/lab07_phase3b_name_standardization.csv", show_col_types = FALSE)
+classification_tbl <- read_csv("outputs/lab07_phase3b_variable_classification.csv", show_col_types = FALSE)
+sample_summary_3b <- read_csv("outputs/lab07_phase3b_sample_summary.csv", show_col_types = FALSE)
+vars_3b <- read_csv("outputs/lab07_phase3b_df_main_variables.csv", show_col_types = FALSE)
+
+required_validated <- classification_tbl %>%
+  filter(obrigatoriedade == "obrigatória", status == "encontrada") %>%
+  pull(variavel)
+
+ols_simple_vars <- c("any_prio", "gdp_g", "gdp_g_l", "ccode")
+ols_full_vars <- c("any_prio", "gdp_g", "gdp_g_l", "y_0", "polity2l", "ethfrac", "relfrac", "oil", "lmtnest", "lpopl1", "ccode", "year_actual")
+ols_union_vars <- union(ols_simple_vars, ols_full_vars)
+
+# C1.1 df_main coincide com tamanho validado na 3B
+n_final_3b <- sample_summary_3b %>% filter(indicador == "N_final") %>% pull(valor)
+if (length(n_final_3b) != 1) {
+  stop("Checkpoint C1 FALHOU: arquivo de resumo da Fase 3B não contém N_final de forma unívoca.")
+}
+
+if (nrow(df_main) != n_final_3b) {
+  stop(
+    "Checkpoint C1 FALHOU: divergência entre df_main atual e tamanho validado na Fase 3B (",
+    nrow(df_main), " vs ", n_final_3b, ")."
+  )
+}
+
+# C1.2 nomes e conjunto de variáveis alinhados à 3B
+if (!all(required_validated %in% names(df_main))) {
+  missing_required <- setdiff(required_validated, names(df_main))
+  stop(
+    "Checkpoint C1 FALHOU: df_main está sem variáveis obrigatórias validadas na 3B: ",
+    paste(missing_required, collapse = ", "), "."
+  )
+}
+
+if (!all(vars_3b$variavel %in% names(df_main))) {
+  missing_from_3b_list <- setdiff(vars_3b$variavel, names(df_main))
+  stop(
+    "Checkpoint C1 FALHOU: variáveis da lista final da 3B ausentes em df_main: ",
+    paste(missing_from_3b_list, collapse = ", "), "."
+  )
+}
+
+if (!all(ols_union_vars %in% required_validated)) {
+  invalid_for_3c <- setdiff(ols_union_vars, required_validated)
+  stop(
+    "Checkpoint C1 FALHOU: variáveis usadas em 3C não pertencem ao conjunto validado: ",
+    paste(invalid_for_3c, collapse = ", "), "."
+  )
+}
+
+# C1.3 sem novas perdas de observação
+na_required <- sum(!complete.cases(df_main[, required_validated]))
+if (na_required > 0) {
+  stop(
+    "Checkpoint C1 FALHOU: df_main apresenta ", na_required,
+    " observações incompletas nas variáveis obrigatórias, divergindo da validação da 3B."
+  )
+}
+
+# Construção de tendência sem excluir observações
+n_before_trend <- nrow(df_main)
+df_main <- df_main %>% mutate(year_trend = year_actual - min(year_actual, na.rm = TRUE))
+n_after_trend <- nrow(df_main)
+
+if (n_before_trend != n_after_trend) {
+  stop("Checkpoint C1 FALHOU: criação de year_trend alterou N da amostra.")
+}
+
+consistency_report <- tibble(
+  criterio = c(
+    "N df_main igual ao N_final validado na 3B",
+    "variáveis obrigatórias da 3B presentes em df_main",
+    "variáveis da 3C pertencem ao conjunto validado",
+    "sem observações incompletas nas obrigatórias",
+    "criação de year_trend sem perda de N"
+  ),
+  status = c("ok", "ok", "ok", "ok", "ok"),
+  detalhe = c(
+    paste0("N atual = ", nrow(df_main), " e N_validado_3B = ", n_final_3b),
+    "Conjunto obrigatório preservado.",
+    paste0("Variáveis usadas: ", paste(ols_union_vars, collapse = ", ")),
+    "Completeness mantida em 100% nas obrigatórias.",
+    paste0("N antes = ", n_before_trend, "; N depois = ", n_after_trend)
+  )
+)
+write_csv(consistency_report, "outputs/lab07_phase3c_consistency_check.csv")
+
+cat("Checkpoint C1 OK: consistência com a Fase 3B explicitamente validada.\n")
+```
+
+## Bloco C2 — Benchmark OLS simples (`mod_ols_simple`)
+
+Especificação estimada na amostra `df_main`:
+
+$$
+any\_prio_{it} = \alpha + \beta_1 gdp\_g_{it} + \beta_2 gdp\_g\_l_{it} + \varepsilon_{it}
+$$
+
+Inferência: erro-padrão clusterizado por `ccode`, para manter coerência com o laboratório.
+
+```{r bloco-c2-ols-simple}
+mod_ols_simple <- feols(
+  any_prio ~ gdp_g + gdp_g_l,
+  data = df_main,
+  vcov = ~ccode
+)
+
+coef_simple <- coef(mod_ols_simple)
+if (!all(c("gdp_g", "gdp_g_l") %in% names(coef_simple))) {
+  stop("Checkpoint C2 FALHOU: coeficientes de gdp_g/gdp_g_l não recuperáveis no OLS simples.")
+}
+
+ols_simple_tidy <- tidy(mod_ols_simple, conf.int = TRUE)
+write_csv(ols_simple_tidy, "outputs/lab07_phase3c_ols_simple_tidy.csv")
+capture.output(summary(mod_ols_simple), file = "outputs/lab07_phase3c_ols_simple_summary.txt")
+
+cat("Checkpoint C2 OK: OLS simples estimado sem erro e coeficientes recuperáveis.\n")
+```
+
+## Bloco C3 — Benchmark OLS ampliado (`mod_ols_full`)
+
+Especificação estimada:
+
+$$
+any\_prio_{it} = \alpha + \beta_1 gdp\_g_{it} + \beta_2 gdp\_g\_l_{it} + X_{it}'\gamma + \lambda_i t + u_{it}
+$$
+
+com $X_{it} = (y_0, polity2l, ethfrac, relfrac, oil, lmtnest, lpopl1)$, tendência temporal específica por país via `ccode[year_trend]` e cluster por `ccode`.
+
+```{r bloco-c3-ols-full}
+mod_ols_full <- feols(
+  any_prio ~ gdp_g + gdp_g_l + y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 |
+    ccode[year_trend],
+  data = df_main,
+  vcov = ~ccode
+)
+
+coef_full <- coef(mod_ols_full)
+if (!all(c("gdp_g", "gdp_g_l") %in% names(coef_full))) {
+  stop("Checkpoint C3 FALHOU: coeficientes de gdp_g/gdp_g_l não recuperáveis no OLS ampliado.")
+}
+
+ols_full_tidy <- tidy(mod_ols_full, conf.int = TRUE)
+write_csv(ols_full_tidy, "outputs/lab07_phase3c_ols_full_tidy.csv")
+capture.output(summary(mod_ols_full), file = "outputs/lab07_phase3c_ols_full_summary.txt")
+
+comparison_tidy <- bind_rows(
+  ols_simple_tidy %>% mutate(modelo = "mod_ols_simple") %>% select(modelo, everything()),
+  ols_full_tidy %>% mutate(modelo = "mod_ols_full") %>% select(modelo, everything())
+)
+write_csv(comparison_tidy, "outputs/lab07_phase3c_ols_comparison_tidy.csv")
+
+etable_ols <- etable(mod_ols_simple, mod_ols_full, vcov = ~ccode)
+write.table(etable_ols, file = "outputs/lab07_phase3c_ols_comparison_table.txt", quote = FALSE, sep = "\t", row.names = TRUE, col.names = NA)
+
+cat("Checkpoint C3 OK: OLS ampliado estimado sem erro e documentação legível gerada.\n")
+```
+
+## Interpretação didática obrigatória
+
+- O **OLS simples** inclui apenas `gdp_g` e `gdp_g_l`, servindo como benchmark associativo de baixa estrutura.
+- O **OLS ampliado** adiciona controles estruturais e tendência temporal específica por país, reduzindo parte de heterogeneidade observável e tendências diferenciais.
+- Mesmo no modelo ampliado, os coeficientes continuam **associativos**: não identificam efeito causal definitivo porque o crescimento econômico pode ser endógeno ao conflito.
+- Fontes centrais de endogeneidade neste problema incluem causalidade reversa (conflito afetando crescimento), variáveis omitidas correlacionadas com crescimento e conflito, e erro de mensuração em variáveis econômicas e institucionais.
+- Por isso, a estratégia IV será necessária na fase seguinte para isolar variação exógena de crescimento associada aos instrumentos de chuva.
+
+## Bloco C4 — README obrigatório (criar ou atualizar)
+
+```{r bloco-c4-readme}
+readme_path <- "README.md"
+
+readme_template <- c(
+  "# MAPP2026-Lab07 — Replicação didática MSS (2004)",
+  "",
+  "## O que é este projeto",
+  "Este repositório implementa, em etapas, um laboratório de replicação didática baseado em Miguel, Satyanath e Sergenti (2004).",
+  "A pergunta empírica central é como choques econômicos (com foco em crescimento) se relacionam com conflito civil em painel país-ano africano.",
+  "",
+  "## Para que serve",
+  "- Apoiar o ensino de métodos quantitativos e inferência causal no curso MAPP.",
+  "- Treinar leitura de especificações empíricas, construção de amostras e interpretação de resultados.",
+  "- Diferenciar explicitamente associação (benchmarks OLS) de interpretação causal (estratégia IV).",
+  "",
+  "## Status do projeto",
+  "- Fase 3A: concluída.",
+  "- Fase 3B: concluída.",
+  "- Fase 3C: concluída.",
+  "",
+  "## Estrutura do repositório",
+  "- `Data/`: base canônica e arquivos de replicação (inclui `mss_repdata_feb07.dta`).",
+  "- `outputs/`: tabelas, objetos e diagnósticos gerados por fase.",
+  "- `docs/`: artefatos `.Rmd/.html` e handoffs por fase.",
+  "- `R/`: scripts auxiliares de renderização/execução por fase.",
+  "",
+  "## Como usar / como executar",
+  "Pré-requisitos em R:",
+  "- `dplyr`, `readr`, `tidyr`, `tibble`, `stringr`, `purrr`, `fixest`, `broom`, `haven`, `fs`, `rmarkdown`.",
+  "",
+  "Arquivo principal da fase atual:",
+  "- `docs/lab07_phase3c.Rmd`",
+  "",
+  "Renderização recomendada:",
+  "- executar `R/lab07_phase3c_render.R` para gerar `docs/lab07_phase3c.html`.",
+  "",
+  "## Principais arquivos e outputs",
+  "Artefatos estruturantes:",
+  "- `docs/lab07_phase3a.Rmd`",
+  "- `docs/lab07_phase3b.Rmd`",
+  "- `docs/lab07_phase3c.Rmd`",
+  "",
+  "Outputs principais até a Fase 3C:",
+  "- `outputs/lab07_phase3b_df_main.rds`",
+  "- `outputs/lab07_phase3c_consistency_check.csv`",
+  "- `outputs/lab07_phase3c_ols_simple_tidy.csv`",
+  "- `outputs/lab07_phase3c_ols_full_tidy.csv`",
+  "- `outputs/lab07_phase3c_ols_comparison_tidy.csv`",
+  "- `outputs/lab07_phase3c_ols_comparison_table.txt`",
+  "",
+  "## Pontos de contato / manutenção",
+  "- Responsável acadêmico: Prof. Ricardo Ceneviva.",
+  "- Fluxo operacional implementado com apoio de Agente de IA executor, seguindo `AGENTS.md` e `Workflow-Projeto.md`.",
+  "",
+  "## Documentação adicional",
+  "Handoffs por fase:",
+  "- `docs/lab07_phase3a_handoff_2026-03-27.md`",
+  "- `docs/lab07_phase3b_handoff_2026-03-27.md`",
+  "- `docs/lab07_phase3c_handoff_2026-03-27.md`",
+  "",
+  "Arquivos auxiliares relevantes:",
+  "- `outputs/lab07_phase3a_variable_mapping.csv`",
+  "- `outputs/lab07_phase3b_name_standardization.csv`",
+  "- `outputs/lab07_phase3b_variable_classification.csv`",
+  "",
+  "## Histórico de atualizações",
+  "- 2026-03-27 — Fase 3A: auditoria de arquivos, ingestão da base canônica e mapeamento inicial de variáveis.",
+  "- 2026-03-27 — Fase 3B: validação de integridade, padronização controlada, construção de `df_main` e descritivas mínimas.",
+  "- 2026-03-27 — Fase 3C: validação de consistência com a 3B, estimação dos benchmarks OLS (simples e ampliado), comparação OLS e atualização do README; IV permanece para a Fase 3D."
+)
+
+if (!file_exists(readme_path)) {
+  writeLines(readme_template, readme_path)
+  readme_action <- "criado"
+} else {
+  current_readme <- readLines(readme_path, warn = FALSE)
+
+  # Atualização conservadora: preserva conteúdo anterior e adiciona seção de atualização da 3C
+  update_block <- c(
+    "",
+    "## Atualização da Fase 3C (2026-03-27)",
+    "- Benchmarks OLS simples e ampliado concluídos sobre `df_main` validado na Fase 3B.",
+    "- Estrutura do OLS ampliado: tendência temporal específica por país (`ccode[year_trend]`) e cluster por `ccode`.",
+    "- Resultados desta fase em `outputs/lab07_phase3c_*.csv` e `outputs/lab07_phase3c_*.txt`.",
+    "- Estratégia IV explicitamente mantida para a Fase 3D."
+  )
+
+  if (!any(str_detect(current_readme, "Fase 3C"))) {
+    current_readme <- c(current_readme, update_block)
+  }
+
+  # Reforça status se seção existir
+  if (any(str_detect(current_readme, "Status do projeto"))) {
+    current_readme <- str_replace_all(current_readme, "Fase 3C:\\s*em execução", "Fase 3C: concluída")
+  }
+
+  writeLines(current_readme, readme_path)
+  readme_action <- "atualizado"
+}
+
+readme_update_log <- tibble(
+  acao_readme = readme_action,
+  secoes_alteradas = if_else(
+    readme_action == "criado",
+    "Título; O que é; Para que serve; Status; Estrutura; Como executar; Principais outputs; Contato; Documentação adicional; Histórico",
+    "Bloco de atualização da Fase 3C e status da fase"
+  )
+)
+write_csv(readme_update_log, "outputs/lab07_phase3c_readme_update_log.csv")
+
+if (!file_exists(readme_path)) {
+  stop("Checkpoint C4 FALHOU: README.md não foi criado/atualizado corretamente.")
+}
+
+cat("Checkpoint C4 OK: README.md ", readme_action, " na raiz.\n", sep = "")
+```
+
+## Bloco C5 — Registro de ambiente e handoff da fase
+
+```{r bloco-c5-handoff}
+capture.output(sessionInfo(), file = "outputs/lab07_phase3c_session_info.txt")
+
+readme_log <- read_csv("outputs/lab07_phase3c_readme_update_log.csv", show_col_types = FALSE)
+
+handoff_lines <- c(
+  "# Handoff — Fase 3C (Lab07)",
+  "",
+  "## 1) O que foi feito",
+  "",
+  "- Leitura das diretrizes canônicas e do handoff da Fase 3B.",
+  "- Validação de consistência da Fase 3C com `df_main` validado na Fase 3B (Checkpoint C1).",
+  "- Estimação dos benchmarks `mod_ols_simple` e `mod_ols_full`.",
+  "- Geração de outputs legíveis dos dois OLS e de tabela comparativa entre benchmarks.",
+  "- Criação/atualização obrigatória do `README.md` na raiz.",
+  "",
+  "## 2) O que foi validado",
+  "",
+  "- **Checkpoint C1:** consistência explícita com a amostra e variáveis validadas na Fase 3B.",
+  "- **Checkpoint C2:** OLS simples estimado sem erro e coeficientes recuperáveis.",
+  "- **Checkpoint C3:** OLS ampliado estimado sem erro, com tendência por país e cluster por `ccode`.",
+  "- **Checkpoint C4:** `README.md` criado/atualizado na raiz e sincronizado com o estado da fase.",
+  "",
+  "## 3) Modelos OLS estimados",
+  "",
+  "- `mod_ols_simple`: `any_prio ~ gdp_g + gdp_g_l` (cluster por `ccode`).",
+  "- `mod_ols_full`: `any_prio ~ gdp_g + gdp_g_l + y_0 + polity2l + ethfrac + relfrac + oil + lmtnest + lpopl1 | ccode[year_trend]` (cluster por `ccode`).",
+  "",
+  "## 4) Estrutura de tendência e cluster",
+  "",
+  "- Tendência temporal específica por país implementada via `ccode[year_trend]` no `fixest`.",
+  "- Erros-padrão clusterizados por `ccode` em ambos os benchmarks OLS.",
+  "",
+  "## 5) README.md",
+  "",
+  paste0("- README foi **", readme_log$acao_readme[[1]], "** nesta fase."),
+  paste0("- Seções alteradas: ", readme_log$secoes_alteradas[[1]], "."),
+  "",
+  "## 6) Arquivos e outputs gerados",
+  "",
+  "- `docs/lab07_phase3c.Rmd`",
+  "- `docs/lab07_phase3c.html`",
+  "- `outputs/lab07_phase3c_prerequisites_check.csv`",
+  "- `outputs/lab07_phase3c_readme_state_before.csv`",
+  "- `outputs/lab07_phase3c_consistency_check.csv`",
+  "- `outputs/lab07_phase3c_ols_simple_tidy.csv`",
+  "- `outputs/lab07_phase3c_ols_simple_summary.txt`",
+  "- `outputs/lab07_phase3c_ols_full_tidy.csv`",
+  "- `outputs/lab07_phase3c_ols_full_summary.txt`",
+  "- `outputs/lab07_phase3c_ols_comparison_tidy.csv`",
+  "- `outputs/lab07_phase3c_ols_comparison_table.txt`",
+  "- `outputs/lab07_phase3c_readme_update_log.csv`",
+  "- `outputs/lab07_phase3c_session_info.txt`",
+  "- `docs/lab07_phase3c_handoff_2026-03-27.md`",
+  "",
+  "## 7) Pendente para a Fase 3D",
+  "",
+  "- First stage.",
+  "- Reduced form.",
+  "- IV/2SLS.",
+  "- Robustez mínima com `war_prio`.",
+  "- Tabelas comparativas finais com IV.",
+  "",
+  "Execução encerrada ao final da Fase 3C, sem avanço para a Fase 3D."
+)
+
+writeLines(handoff_lines, "docs/lab07_phase3c_handoff_2026-03-27.md")
+```

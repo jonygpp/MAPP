@@ -1,0 +1,5 @@
+artefato,caminho,existe
+Rmd iniciado na Fase 3A,docs/lab07_phase3a.Rmd,TRUE
+handoff da Fase 3A,docs/lab07_phase3a_handoff_2026-03-27.md,TRUE
+tabela de mapeamento da Fase 3A,outputs/lab07_phase3a_variable_mapping.csv,TRUE
+base canônica feb07,Data/mss_repdata_feb07.dta,TRUE

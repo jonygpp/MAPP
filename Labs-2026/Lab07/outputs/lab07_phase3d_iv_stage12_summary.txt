@@ -1,0 +1,70 @@
+IV: First stage: gdp_g
+TSLS estimation - Dep. Var.: gdp_g
+                  Endo.    : gdp_g, gdp_g_l
+                  Instr.   : gpcp_g, gpcp_g_l
+First stage: Dep. Var.: gdp_g
+Observations: 743
+Fixed-effects: ccode: 41
+Varying slopes: year_trend (ccode): 41
+Standard-errors: Clustered (ccode) 
+          Estimate Std. Error  t value  Pr(>|t|)    
+gpcp_g    0.047752   0.016790  2.84406 0.0069858 ** 
+gpcp_g_l  0.024796   0.014134  1.75437 0.0870267 .  
+polity2l -0.000896   0.000731 -1.22508 0.2277105    
+oil      -0.050797   0.015149 -3.35309 0.0017569 ** 
+lpopl1   -0.312435   0.229965 -1.35862 0.1818800    
+... 4 variables were removed because of collinearity (y_0, ethfrac and 2
+others [full set in $collin.var])
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+RMSE: 0.065297     Adj. R2: 0.033808
+                 Within R2: 0.033715
+F-test (1st stage): stat = 6.3995, p = 0.001762, on 2 and 696 DoF.
+
+IV: First stage: gdp_g_l
+TSLS estimation - Dep. Var.: gdp_g_l
+                  Endo.    : gdp_g, gdp_g_l
+                  Instr.   : gpcp_g, gpcp_g_l
+First stage: Dep. Var.: gdp_g_l
+Observations: 743
+Fixed-effects: ccode: 41
+Varying slopes: year_trend (ccode): 41
+Standard-errors: Clustered (ccode) 
+          Estimate Std. Error   t value   Pr(>|t|)    
+gpcp_g   -0.013107   0.016267 -0.805773 4.2514e-01    
+gpcp_g_l  0.032559   0.016754  1.943344 5.9035e-02 .  
+polity2l -0.000399   0.000824 -0.483861 6.3112e-01    
+oil      -0.040975   0.005440 -7.532368 3.4390e-09 ***
+lpopl1   -0.272262   0.125275 -2.173303 3.5737e-02 *  
+... 4 variables were removed because of collinearity (y_0, ethfrac and 2
+others [full set in $collin.var])
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+RMSE: 0.067336     Adj. R2: 0.020049
+                 Within R2: 0.026136
+F-test (1st stage): stat = 5.1382, p = 0.006093, on 2 and 696 DoF.
+
+IV: Second stage
+TSLS estimation - Dep. Var.: any_prio
+                  Endo.    : gdp_g, gdp_g_l
+                  Instr.   : gpcp_g, gpcp_g_l
+Second stage: Dep. Var.: any_prio
+Observations: 743
+Fixed-effects: ccode: 41
+Varying slopes: year_trend (ccode): 41
+Standard-errors: Clustered (ccode) 
+             Estimate Std. Error   t value Pr(>|t|)    
+fit_gdp_g   -1.151261   1.459056 -0.789045 0.434738    
+fit_gdp_g_l -2.619097   1.227981 -2.132849 0.039125 *  
+polity2l    -0.001607   0.005508 -0.291772 0.771969    
+oil         -0.097210   0.125011 -0.777614 0.441372    
+lpopl1      -0.317469   1.136137 -0.279428 0.781356    
+... 4 variables were removed because of collinearity (y_0, ethfrac and 2
+others [full set in $collin.var])
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+RMSE: 0.304921     Adj. R2: 0.671878
+                 Within R2: 0.014773
+F-test (1st stage), gdp_g  : stat = 6.3995, p = 0.001762, on 2 and 696 DoF.
+F-test (1st stage), gdp_g_l: stat = 5.1382, p = 0.006093, on 2 and 696 DoF.
+                 Wu-Hausman: stat =     NA, p = NA      , on 2 and 654 DoF.

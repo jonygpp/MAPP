@@ -1,0 +1,238 @@
+---
+title: "Lab07 MAPP — Fase 3A (auditoria, ingestão e mapeamento)"
+author: "Agente executor IA"
+date: "2026-03-27"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+```
+
+## Escopo desta fase
+
+**Modo principal:** empirical analysis  
+**Função secundária:** pedagogical support
+
+Esta execução cobre **apenas a Fase 3A**:
+
+1. auditoria de arquivos canônicos;
+2. ingestão da base canônica feb07;
+3. inspeção de estrutura;
+4. tabela de mapeamento de variáveis;
+5. registro textual da especificação canônica;
+6. preparação do artefato inicial em literate programming.
+
+Não inclui regressões, amostra final, descritivas ou robustez de resultados.
+
+## Bloco A1 — Auditoria de arquivos canônicos
+
+```{r bloco-a1-auditoria}
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(haven)
+  library(fixest)
+  library(fs)
+})
+
+required_files <- tibble::tribble(
+  ~arquivo_requerido, ~caminho_preferencial,
+  "AGENTS.md", "AGENTS.md",
+  "Workflow-Projeto.md", "Workflow-Projeto.md",
+  "files_list.md", "files_list.md",
+  "Data/mss_repdata_feb07.dta", "Data/mss_repdata_feb07.dta",
+  "Data/mss_manual_feb07.pdf", "Data/mss_manual_feb07.pdf",
+  "Data/mss_rep_results.do", "Data/mss_rep_results.do"
+) %>%
+  mutate(
+    caminho_detectado = case_when(
+      arquivo_requerido == "files_list.md" & file_exists("files_list.md") ~ "files_list.md",
+      arquivo_requerido == "files_list.md" & file_exists("docs/files_list.md") ~ "docs/files_list.md",
+      file_exists(caminho_preferencial) ~ caminho_preferencial,
+      TRUE ~ NA_character_
+    ),
+    existe = !is.na(caminho_detectado),
+    observacao = case_when(
+      arquivo_requerido == "files_list.md" & caminho_detectado == "docs/files_list.md" ~
+        "arquivo encontrado em docs/ (não na raiz)",
+      TRUE ~ ""
+    )
+  )
+
+required_files
+
+write_csv(required_files, "outputs/lab07_phase3a_file_audit.csv")
+
+missing_required <- required_files %>% filter(!existe)
+if (nrow(missing_required) > 0) {
+  stop(
+    "Arquivos obrigatórios ausentes: ",
+    paste(missing_required$arquivo_requerido, collapse = ", "),
+    ". Execução interrompida."
+  )
+}
+
+# Definições explícitas solicitadas
+canonical_main_data <- "Data/mss_repdata_feb07.dta"
+canonical_aux_do <- "Data/mss_rep_results.do"
+
+cat("Base canônica principal:", canonical_main_data, "\n")
+cat("Arquivo auxiliar de conferência:", canonical_aux_do, "\n")
+
+# Checkpoint A1
+if (!file_exists(canonical_main_data)) {
+  stop("Checkpoint A1 FALHOU: Data/mss_repdata_feb07.dta não existe.")
+}
+cat("Checkpoint A1 OK: base canônica feb07 existe.\n")
+```
+
+## Bloco A2 — Ingestão e inspeção inicial (`df_raw`)
+
+```{r bloco-a2-ingestao}
+df_raw <- haven::read_dta(canonical_main_data)
+
+# Estrutura solicitada
+raw_dim <- dim(df_raw)
+raw_names <- names(df_raw)
+raw_class <- class(df_raw)
+
+dim(df_raw)
+names(df_raw)
+raw_class
+
+# Metadados de dataset e variáveis
+dataset_label <- attr(df_raw, "label")
+var_label_tbl <- tibble(
+  variavel = names(df_raw),
+  tem_rotulo = purrr::map_lgl(df_raw, ~ !is.null(attr(.x, "label")))
+)
+
+list(
+  dataset_label = dataset_label,
+  n_variaveis_com_rotulo = sum(var_label_tbl$tem_rotulo)
+)
+
+# Checagem de presença por nome esperado (tolerando capitalização)
+names_upper <- toupper(names(df_raw))
+has_ccode_ci <- "CCODE" %in% names_upper
+has_year_actual_ci <- "YEAR_ACTUAL" %in% names_upper
+has_year_ci <- "YEAR" %in% names_upper
+
+if (!has_ccode_ci) {
+  stop("Checkpoint A2 FALHOU: CCODE ausente na base (inclusive por capitalização).")
+}
+if (!(has_year_actual_ci || has_year_ci)) {
+  stop("Checkpoint A2 FALHOU: YEAR_ACTUAL ausente e YEAR não disponível para referência temporal.")
+}
+
+# Padronização mínima para garantir CCODE e YEAR_ACTUAL explicitamente presentes
+if (!("CCODE" %in% names(df_raw))) {
+  ccode_src <- names(df_raw)[which(toupper(names(df_raw)) == "CCODE")[1]]
+  df_raw <- df_raw %>% mutate(CCODE = .data[[ccode_src]])
+}
+
+if (!("YEAR_ACTUAL" %in% names(df_raw))) {
+  if ("year_actual" %in% names(df_raw)) {
+    df_raw <- df_raw %>% mutate(YEAR_ACTUAL = .data$year_actual)
+  } else if ("YEAR" %in% names(df_raw)) {
+    df_raw <- df_raw %>% mutate(YEAR_ACTUAL = .data$YEAR)
+  } else if ("year" %in% names(df_raw)) {
+    df_raw <- df_raw %>% mutate(YEAR_ACTUAL = .data$year)
+  }
+}
+
+if (!("CCODE" %in% names(df_raw) && "YEAR_ACTUAL" %in% names(df_raw))) {
+  stop("Checkpoint A2 FALHOU: df_raw não contém CCODE e YEAR_ACTUAL após padronização mínima.")
+}
+
+cat("Checkpoint A2 OK: df_raw carregado e contém CCODE e YEAR_ACTUAL.\n")
+```
+
+## Bloco A3 — Tabela de mapeamento de variáveis
+
+```{r bloco-a3-mapeamento}
+detect_name <- function(expected_upper, data_names) {
+  if (expected_upper %in% data_names) return(expected_upper)
+  idx <- which(toupper(data_names) == expected_upper)
+  if (length(idx) == 0) return(NA_character_)
+  data_names[idx[1]]
+}
+
+mapping_spec <- tibble::tribble(
+  ~conceito, ~nome_esperado, ~papel_no_modelo,
+  "Identificação", "CCODE", "cluster",
+  "Identificação", "YEAR_ACTUAL", "tendência temporal",
+  "Identificação", "COUNTRY_NAME", "identificação do país",
+  "Identificação", "COUNTRY_CODE", "identificação do país",
+  "Desfecho", "ANY_PRIO", "desfecho principal",
+  "Desfecho", "WAR_PRIO", "robustez mínima",
+  "Desfecho", "ANY_PRIO_NAR", "robustez opcional narrow",
+  "Desfecho", "WAR_PRIO_NAR", "robustez opcional narrow",
+  "Endógena", "GDP_G", "endógena",
+  "Endógena", "GDP_G_L", "endógena defasada",
+  "Instrumento", "GPCP_G", "instrumento",
+  "Instrumento", "GPCP_G_L", "instrumento defasado",
+  "Controle", "Y_0", "renda inicial",
+  "Controle", "POLITY2L", "controle político",
+  "Controle", "ETHFRAC", "controle estrutural",
+  "Controle", "RELFRAC", "controle estrutural",
+  "Controle", "OIL", "controle estrutural",
+  "Controle", "LMTNEST", "controle estrutural",
+  "Controle", "LPOPL1", "controle estrutural"
+)
+
+mapping_table <- mapping_spec %>%
+  mutate(
+    nome_na_base = purrr::map_chr(nome_esperado, ~ detect_name(.x, names(df_raw))),
+    status = if_else(!is.na(nome_na_base), "encontrada", "ausente"),
+    observacao = case_when(
+      is.na(nome_na_base) ~ "não encontrada com esse nome na base",
+      nome_na_base != nome_esperado ~ "encontrada por diferença de capitalização/alias explícito",
+      TRUE ~ ""
+    )
+  ) %>%
+  select(conceito, nome_na_base, papel_no_modelo, status, observacao, nome_esperado)
+
+mapping_table
+
+write_csv(mapping_table, "outputs/lab07_phase3a_variable_mapping.csv")
+
+# Checkpoint A3: tabela completa (todos os itens solicitados mapeados com status explícito)
+if (nrow(mapping_table) != nrow(mapping_spec)) {
+  stop("Checkpoint A3 FALHOU: tabela de mapeamento incompleta.")
+}
+cat("Checkpoint A3 OK: tabela de mapeamento construída para todos os itens exigidos.\n")
+```
+
+## Especificação canônica registrada (Lab07)
+
+- **Desfecho:** `ANY_PRIO`
+- **Endógenas:** `GDP_G`, `GDP_G_L`
+- **Instrumentos:** `GPCP_G`, `GPCP_G_L`
+- **Controles:** `Y_0`, `POLITY2L`, `ETHFRAC`, `RELFRAC`, `OIL`, `LMTNEST`, `LPOPL1`
+- **Estrutura:** benchmarks OLS didáticos; modelo principal IV/2SLS; country-specific time trends; clustering por `CCODE`; robustez mínima com `WAR_PRIO`.
+
+## Nota curta de auditoria (arquivo)
+
+```{r nota-auditoria-arquivo}
+audit_note_lines <- c(
+  "Lab07 Fase 3A — Nota curta de auditoria",
+  "- Arquivos canônicos verificados e registrados em outputs/lab07_phase3a_file_audit.csv.",
+  "- Base principal definida: Data/mss_repdata_feb07.dta.",
+  "- Arquivo auxiliar definido: Data/mss_rep_results.do.",
+  "- Ingestão concluída com df_raw.",
+  "- Mapeamento de variáveis registrado em outputs/lab07_phase3a_variable_mapping.csv.",
+  "- Esta fase não executa regressões nem construção da amostra final."
+)
+writeLines(audit_note_lines, "docs/lab07_phase3a_audit_note.md")
+```
+
+## Registro de ambiente (equivalente a sessioninfo)
+
+```{r session-record}
+capture.output(sessionInfo(), file = "outputs/lab07_phase3a_session_info.txt")
+```

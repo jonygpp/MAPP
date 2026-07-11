@@ -1,0 +1,609 @@
+---
+title: "Lab07 — Integrador para Alunos (v1)"
+author: "Ricardo Ceneviva"
+date: "2026-03-30"
+format:
+  html:
+    toc: true
+    number-sections: true
+    embed-resources: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Título e abertura
+
+Este documento integra, em formato didático, os resultados já validados do Lab07.
+
+**Classificação da Subfase 3:**
+
+- modo principal: produção pedagógica;
+- modo secundário: integração de materiais;
+- modo subordinado: apoio empírico somente por leitura de artefatos já existentes.
+
+Este material foi organizado para distribuição aos alunos, preservando as decisões metodológicas já aprovadas nas fases anteriores.
+
+# Objetivo de aprendizagem
+
+Ao final deste laboratório, espera-se que a turma consiga:
+
+1. distinguir associação (OLS) de interpretação causal (IV/2SLS);
+2. explicar a lógica do instrumento climático no artigo de Miguel, Satyanath e Sergenti (2004);
+3. interpretar resultados de first stage, reduced form e IV sem reestimar modelos;
+4. discutir limitações de identificação com base nos diagnósticos já validados.
+
+# Pergunta causal e contexto empírico
+
+A pergunta causal central é:
+
+> Qual é o efeito de choques de crescimento econômico sobre a probabilidade de conflito civil?
+
+No desenho do artigo original e do Lab07:
+
+- a variável de interesse é o crescimento econômico;
+- o desfecho é conflito civil em painel país-ano;
+- a estratégia causal usa choques de chuva como instrumento para crescimento.
+
+Intuição do IV:
+
+1. **Relevância:** chuva afeta crescimento em economias com forte dependência agrícola.
+2. **Exogeneidade condicional:** choques de chuva são tratados como variação exógena para identificar o componente de crescimento não determinado por conflito.
+3. **Canal causal estimado:** chuva $\rightarrow$ crescimento $\rightarrow$ conflito.
+
+Este integrador preserva a interpretação validada nas fases anteriores e não modifica resultados.
+
+Guia de leitura: os blocos seguintes caminham da descrição do painel para benchmarks OLS, depois para identificação IV e, por fim, para comparação crítica dos resultados.
+
+# Instruções de execução
+
+## Convenção de execução e caminhos
+
+- Arquivo-fonte canônico: `docs/lab07_integrador_alunos_v1.qmd`.
+- Output principal canônico: `docs/lab07_integrador_alunos_v1.html`.
+- Formato principal: HTML.
+- Formato opcional futuro: PDF (não implementado nesta subfase).
+- Caminhos sempre relativos à raiz do projeto.
+- Integração com R via Quarto/knitr.
+
+## Regra central de não interferência
+
+1. Este integrador **não** reestima modelos do Lab07.
+2. Este integrador **não** sobrescreve outputs das Fases 3A–3E.
+3. Este integrador **não** modifica dados em `Data/`.
+4. Este integrador **não** substitui pipeline validado.
+5. Nesta subfase, blocos de código com risco de reestimação devem ficar com `eval: false`.
+
+## Convenções de chunks, tabelas e figuras
+
+- Padrão de nomes de chunks:
+  - setup: `sf2-setup-*`
+  - blocos analíticos: `b1-*`, `b2-*`, ..., `b6-*`
+  - tabelas: `tbl-*`
+  - figuras: `fig-*`
+- Política de execução nesta subfase:
+  - `echo: true` por padrão didático;
+  - `warning: false` e `message: false` para legibilidade;
+  - `eval: false` em qualquer chunk que possa alterar resultados já validados.
+- Política de IO:
+  - leitura de artefatos apenas em `outputs/` com caminhos relativos;
+  - proibição de escrita/sobrescrita de arquivos existentes.
+- Legendas e rótulos:
+  - tabelas futuras com prefixo `tbl:` e rótulo `#tbl-*`;
+  - figuras futuras com prefixo `fig:` e rótulo `#fig-*`.
+- Referências cruzadas futuras:
+  - usar `@tbl-*` e `@fig-*` para manter rastreabilidade didática.
+
+```{r}
+#| label: sf2-setup-global
+
+# Setup de leitura e exibição (sem estimação).
+library(readr)
+library(dplyr)
+library(knitr)
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+
+# O arquivo .qmd está em docs/; a raiz analítica do projeto está um nível acima.
+knitr::opts_knit$set(root.dir = "..")
+```
+
+# Bloco 1: Problema causal e desenho
+
+Este bloco organiza a lógica do problema causal.
+
+- Se usarmos apenas OLS, o coeficiente de crescimento pode capturar causalidade reversa e variáveis omitidas.
+- A estratégia IV busca isolar a parte exógena do crescimento gerada por choques climáticos.
+- Assim, a leitura causal recai sobre o componente identificado pelo instrumento, e não sobre qualquer variação observada de crescimento.
+
+Checkpoint conceitual:
+
+1. O que precisa ser verdadeiro para interpretar IV como causal?
+2. Por que OLS e IV podem diferir em magnitude?
+
+# Bloco 2: Estrutura dos dados
+
+Neste bloco, descrevemos a estrutura do painel a partir da tabela descritiva validada na Fase 3B.
+
+```{r}
+#| label: b2-read-descriptive
+
+tbl_b2_desc <- readr::read_csv("outputs/lab07_phase3b_descriptive_stats.csv", show_col_types = FALSE)
+tbl_b2_desc
+```
+
+```{r}
+#| label: tbl-b2-descriptive
+#| tbl-cap: "Estatísticas descritivas validadas (Fase 3B)."
+
+knitr::kable(
+  tbl_b2_desc
+)
+```
+
+Leitura didática:
+
+- A estrutura é país-ano (painel), com variáveis de conflito, crescimento e controles.
+- O N da amostra validada é mantido conforme pipeline já encerrado.
+- Nesta subfase, os dados são apenas lidos de `outputs/`.
+
+Para consulta rápida, a Tabela @tbl-b2-descriptive resume as variáveis centrais usadas no restante do integrador.
+
+# Bloco 3: Benchmark OLS
+
+Este bloco apresenta os benchmarks OLS como **associação**, não como efeito causal.
+
+```{r}
+#| label: b3-read-ols
+
+tbl_b3_ols_simple <- readr::read_csv("outputs/lab07_phase3c_ols_simple_tidy.csv", show_col_types = FALSE)
+tbl_b3_ols_full <- readr::read_csv("outputs/lab07_phase3c_ols_full_tidy.csv", show_col_types = FALSE)
+
+tbl_b3_ols_simple
+tbl_b3_ols_full
+```
+
+```{r}
+#| label: tbl-b3-ols-simple
+#| tbl-cap: "OLS simples (benchmark associativo) — resultados validados na Fase 3C."
+
+knitr::kable(
+  tbl_b3_ols_simple
+)
+```
+
+```{r}
+#| label: tbl-b3-ols-full
+#| tbl-cap: "OLS ampliado com controles — resultados validados na Fase 3C."
+
+knitr::kable(
+  tbl_b3_ols_full
+)
+```
+
+Interpretação didática:
+
+- OLS informa covariação entre crescimento e conflito.
+- Sem identificação exógena, o coeficiente não deve ser lido como causal.
+- OLS funciona como benchmark para comparação com IV.
+
+As Tabelas @tbl-b3-ols-simple e @tbl-b3-ols-full devem ser lidas como referência associativa para o contraste posterior com IV.
+
+Checkpoint conceitual (Bloco 3):
+
+1. Qual é a diferença entre “coeficiente estatisticamente diferente de zero” e “efeito causal identificado”?
+2. Por que controles observáveis não eliminam, por si só, toda endogeneidade?
+
+# Bloco 4: First stage e reduced form
+
+## Objetivo deste bloco
+
+Antes de interpretar o IV, é necessário verificar duas condições preliminares:
+
+1. **Relevância do instrumento:** a chuva realmente afeta o crescimento? O *first stage* responde a essa pergunta.
+2. **Efeito reduzido (*reduced form*):** a chuva afeta diretamente o conflito, sem passar pelo crescimento? Se sim, isso é consistente com o canal causal proposto.
+
+Esse bloco tem função diagnóstica. Ele não produz o estimando causal final, mas sustenta (ou questiona) a validade da estratégia IV.
+
+## Dados lidos neste bloco
+
+```{r}
+#| label: b4-read-firststage-rf
+
+tbl_b4_fs_diag <- readr::read_csv("outputs/lab07_phase3d_first_stage_diagnostics.csv", show_col_types = FALSE)
+tbl_b4_fs     <- readr::read_csv("outputs/lab07_phase3d_first_stage_tidy.csv",        show_col_types = FALSE)
+tbl_b4_rf     <- readr::read_csv("outputs/lab07_phase3d_reduced_form_tidy.csv",       show_col_types = FALSE)
+```
+
+## Diagnósticos de força do instrumento
+
+A tabela abaixo reporta as estatísticas F dos first stages para cada variável endógena. Convencionalmente, $F > 10$ sugere instrumento relevante. Aqui os valores ficam abaixo desse limiar, indicando força moderada.
+
+```{r}
+#| label: tbl-b4-first-stage-diag
+#| tbl-cap: "Diagnósticos de first stage: estatísticas F por variável endógena (Fase 3D)."
+
+knitr::kable(
+  tbl_b4_fs_diag |>
+    dplyr::mutate(dplyr::across(where(is.numeric), ~ round(.x, 4))),
+  col.names = c("Equação", "F", "p-valor", "gl numerador", "gl denominador")
+)
+```
+
+## Coeficientes do first stage
+
+A tabela a seguir mostra os coeficientes das equações de first stage — isto é, o quanto cada instrumento (`gpcp_g`, `gpcp_g_l`) explica o crescimento endógeno, condicional aos controles. Coeficientes positivos e estatisticamente distinguíveis de zero corroboram a relevância do instrumento.
+
+```{r}
+#| label: tbl-b4-first-stage-coefs
+#| tbl-cap: "Coeficientes do first stage: instrumentos sobre variáveis endógenas (Fase 3D)."
+
+knitr::kable(
+  tbl_b4_fs |>
+    dplyr::select(first_stage_equation, term, estimate, std.error, p.value, conf.low, conf.high) |>
+    dplyr::mutate(dplyr::across(where(is.numeric), ~ round(.x, 4))),
+  col.names = c("Equação first stage", "Variável", "Coef.", "EP", "p-valor", "IC inf.", "IC sup.")
+)
+```
+
+## Gráfico: estatísticas F do first stage
+
+O gráfico a seguir destaca visualmente as F-estatísticas dos two first stages. A linha tracejada em vermelho marca o limiar convencional de $F = 10$.
+
+```{r}
+#| label: fig-b4-first-stage-fstat
+#| fig-cap: "Estatísticas F do first stage para gdp_g e gdp_g_l (Fase 3D). Linha tracejada: limiar convencional F = 10."
+
+plot_df_fs <- tbl_b4_fs_diag |>
+  dplyr::filter(diagnostico %in% c("ivf1::gdp_g", "ivf1::gdp_g_l")) |>
+  dplyr::mutate(
+    diagnostico = dplyr::recode(
+      diagnostico,
+      "ivf1::gdp_g"  = "gdp_g",
+      "ivf1::gdp_g_l" = "gdp_g_l"
+    )
+  )
+
+bar_centers <- barplot(
+  height    = plot_df_fs$estatistica,
+  names.arg = plot_df_fs$diagnostico,
+  col       = "steelblue",
+  ylim      = c(0, max(10, plot_df_fs$estatistica) * 1.25),
+  ylab      = "Estatística F",
+  xlab      = "Variável endógena",
+  main      = "Força do instrumento (first stage F-stat)"
+)
+abline(h = 10, lty = 2, col = "firebrick", lwd = 1.5)
+text(
+  x      = bar_centers,
+  y      = plot_df_fs$estatistica,
+  labels = round(plot_df_fs$estatistica, 2),
+  pos    = 3,
+  cex    = 0.9
+)
+text(
+  x      = par("usr")[2],
+  y      = 10,
+  labels = "F = 10",
+  col    = "firebrick",
+  adj    = c(1.1, -0.3),
+  cex    = 0.8
+)
+```
+
+## Reduced form
+
+A *reduced form* regride o desfecho (conflito) diretamente sobre os instrumentos (chuva), sem passar pela variável endógena. Se a chuva afeta conflito pelo canal crescimento, esperamos um coeficiente negativo de `gpcp_g_l`: mais chuva $\rightarrow$ mais crescimento $\rightarrow$ menos conflito.
+
+```{r}
+#| label: tbl-b4-reduced-form
+#| tbl-cap: "Reduced form: coeficientes dos instrumentos sobre conflito (Fase 3D)."
+
+knitr::kable(
+  tbl_b4_rf |>
+    dplyr::select(term, estimate, std.error, p.value, conf.low, conf.high) |>
+    dplyr::mutate(dplyr::across(where(is.numeric), ~ round(.x, 4))),
+  col.names = c("Variável", "Coef.", "EP", "p-valor", "IC inf.", "IC sup.")
+)
+```
+
+## Interpretação
+
+- As F-estatísticas do first stage ficam abaixo de 10, o que indica instrumento de força **moderada**. Isso não invalida a análise, mas implica maior incerteza na estimativa IV e possível viés finito.
+- Os coeficientes do first stage mostram que chuva contemporânea (`gpcp_g`) e defasada (`gpcp_g_l`) têm efeitos positivos sobre crescimento, compatíveis com o mecanismo agrícola proposto.
+- Na reduced form, `gpcp_g_l` tem coeficiente negativo e estatisticamente distinguível de zero, sugerindo que chuva defasada reduz conflito — consistente com o canal causal esperado.
+
+As Tabelas @tbl-b4-first-stage-diag, @tbl-b4-first-stage-coefs e @tbl-b4-reduced-form, e a Figura @fig-b4-first-stage-fstat, sintetizam essa etapa de diagnóstico.
+
+> **Checkpoint conceitual (Bloco 4)**
+>
+> 1. O que a condição de **relevância** exige do first stage? Por que ela não é testável apenas pelo coeficiente, mas também pela estatística F?
+> 2. Por que $F < 10$ aumenta a preocupação com **viés finito** em IV? Em que direção esse viés tende a operar?
+> 3. O que a reduced form identifica? Por que é importante verificar que o instrumento tem efeito reduzido sobre o desfecho antes de confiar no IV?
+
+# Bloco 5: 2SLS
+
+## Objetivo deste bloco
+
+O 2SLS (*Two-Stage Least Squares*) usa os instrumentos validados no Bloco 4 para isolar a variação exógena do crescimento e estimar seu efeito sobre conflito. O resultado é interpretado como um **LATE** (*Local Average Treatment Effect*): o efeito causal médio para os países cuja variação de crescimento é efetivamente determinada pelos instrumentos climáticos.
+
+Esse estimando é **local** porque:
+
+- Ele reflete apenas a variação de crescimento induzida por choques de chuva.
+- Países onde crescimento é pouco sensível à chuva contribuem menos para a estimativa.
+- O LATE não se generaliza automaticamente para contextos sem dependência agrícola da renda.
+
+## Dados lidos neste bloco
+
+```{r}
+#| label: b5-read-iv
+
+tbl_b5_iv   <- readr::read_csv("outputs/lab07_phase3d_iv_main_tidy.csv",         show_col_types = FALSE)
+tbl_b5_comp <- readr::read_csv("outputs/lab07_phase3d_models_comparison_tidy.csv", show_col_types = FALSE)
+```
+
+## Coeficientes IV/2SLS principais
+
+A tabela abaixo reporta os coeficientes do segundo estágio IV para as variáveis de crescimento. `fit_gdp_g` e `fit_gdp_g_l` são os valores ajustados do crescimento obtidos no first stage — eles representam a parte de variação do crescimento atribuída ao instrumento climático.
+
+```{r}
+#| label: tbl-b5-iv-main
+#| tbl-cap: "Resultados IV/2SLS principais — segundo estágio (Fase 3D)."
+
+knitr::kable(
+  tbl_b5_iv |>
+    dplyr::select(term, estimate, std.error, p.value, conf.low, conf.high) |>
+    dplyr::mutate(dplyr::across(where(is.numeric), ~ round(.x, 4))),
+  col.names = c("Variável", "Coef. IV", "EP", "p-valor", "IC inf.", "IC sup.")
+)
+```
+
+## Gráfico: coeficientes IV com intervalos de confiança
+
+O gráfico a seguir exibe os coeficientes IV de `fit_gdp_g` e `fit_gdp_g_l` com seus intervalos de confiança a 95%. A linha tracejada marca o zero. Intervalos que cruzam o zero indicam imprecisão estatística, não ausência de efeito.
+
+```{r}
+#| label: fig-b5-iv-coefs
+#| fig-cap: "Coeficientes IV/2SLS de crescimento com intervalos de confiança a 95% (Fase 3D)."
+
+plot_b5 <- tbl_b5_iv |>
+  dplyr::filter(term %in% c("fit_gdp_g", "fit_gdp_g_l")) |>
+  dplyr::mutate(
+    rotulo = dplyr::recode(
+      term,
+      "fit_gdp_g"   = "gdp_g (IV)",
+      "fit_gdp_g_l" = "gdp_g_l (IV)"
+    ),
+    y_id = dplyr::row_number()
+  )
+
+xmin_b5 <- min(plot_b5$conf.low,  na.rm = TRUE) - 0.5
+xmax_b5 <- max(plot_b5$conf.high, na.rm = TRUE) + 0.5
+
+plot(
+  x    = plot_b5$estimate,
+  y    = plot_b5$y_id,
+  xlim = c(xmin_b5, xmax_b5),
+  ylim = c(0.5, nrow(plot_b5) + 0.5),
+  yaxt = "n",
+  pch  = 18,
+  col  = "navy",
+  cex  = 1.4,
+  xlab = "Coeficiente estimado (IV)",
+  ylab = "",
+  main = "Estimativas IV/2SLS: crescimento e conflito (any_prio)"
+)
+axis(2, at = plot_b5$y_id, labels = plot_b5$rotulo, las = 1, cex.axis = 0.9)
+segments(
+  x0  = plot_b5$conf.low,
+  y0  = plot_b5$y_id,
+  x1  = plot_b5$conf.high,
+  y1  = plot_b5$y_id,
+  col = "navy",
+  lwd = 2
+)
+abline(v = 0, lty = 2, col = "gray40")
+```
+
+## Interpretação
+
+- `fit_gdp_g` (contemporâneo): coeficiente negativo, mas intervalo de confiança amplo cruza o zero. A imprecisão reflete, em parte, a força moderada do instrumento.
+- `fit_gdp_g_l` (defasado): coeficiente negativo e estatisticamente distinguível de zero a 5%. Interpretação: um aumento de 1 ponto percentual no crescimento do ano anterior, quando induzido por chuva, está associado a redução de cerca de 2,6 pontos percentuais na probabilidade de conflito.
+- A magnitude IV é substancialmente maior (em módulo) do que OLS. Isso é consistente com atenuação por erro de mensuração no OLS ou com causalidade reversa que enviesa OLS para cima.
+- A leitura causal vale **sob as hipóteses de identificação**: relevância (F-stat), exogeneidade condicional e exclusão do instrumento.
+
+A Tabela @tbl-b5-iv-main e a Figura @fig-b5-iv-coefs devem ser lidas em conjunto com os diagnósticos do Bloco 4.
+
+> **Checkpoint conceitual (Bloco 5)**
+>
+> 1. Em que sentido o IV identifica um **efeito local (LATE)**, e não necessariamente um efeito médio global (ATE)? Para quem esse efeito se aplica?
+> 2. Os coeficientes IV são maiores em módulo do que os OLS. Quais são as duas explicações mais comuns para essa diferença? Como distingui-las empiricamente?
+> 3. O intervalo de confiança de `fit_gdp_g` inclui o zero. O que isso significa para a interpretação — e o que **não** significa?
+
+# Bloco 6: Interpretação e crítica
+
+## Objetivo deste bloco
+
+Este bloco integra os resultados dos blocos anteriores para responder, de forma crítica, três perguntas:
+
+1. O que os resultados OLS, reduced form e IV dizem em conjunto?
+2. Quais conclusões causais são sustentáveis sob as hipóteses validadas?
+3. Quais limitações inferenciais e substantivas permanecem abertas?
+
+A função pedagógica aqui é transformar resultados separados em uma leitura metodologicamente disciplinada: distinguir associação de causalidade, explicitar hipóteses de identificação e reconhecer limites de precisão.
+
+## Dados lidos neste bloco
+
+```{r}
+#| label: b6-read-comparison
+
+tbl_b6_comp_3d <- readr::read_csv("outputs/lab07_phase3d_models_comparison_tidy.csv", show_col_types = FALSE)
+tbl_b6_comp_3e <- readr::read_csv("outputs/lab07_phase3e_final_models_comparison.csv", show_col_types = FALSE)
+tbl_b6_key_wide <- readr::read_csv("outputs/lab07_phase3e_final_key_coefs_wide.csv", show_col_types = FALSE)
+```
+
+## Tabela de comparação integrada (any_prio e war_prio)
+
+```{r}
+#| label: tbl-b6-comp-main
+#| tbl-cap: "Comparação integrada de coeficientes de crescimento em OLS, reduced form e IV (Fases 3D e 3E)."
+
+tbl_b6_main <- tbl_b6_comp_3e |>
+  dplyr::filter(desfecho %in% c("any_prio", "war_prio")) |>
+  dplyr::filter(term %in% c("gdp_g", "gdp_g_l", "gpcp_g", "gpcp_g_l", "fit_gdp_g", "fit_gdp_g_l")) |>
+  dplyr::select(modelo, desfecho, tipo, term, estimate, std.error, p.value, conf.low, conf.high) |>
+  dplyr::mutate(dplyr::across(where(is.numeric), ~ round(.x, 4)))
+
+knitr::kable(
+  tbl_b6_main,
+  col.names = c("Modelo", "Desfecho", "Tipo", "Termo", "Coef.", "EP", "p-valor", "IC inf.", "IC sup.")
+)
+```
+
+## Tabela-resumo de coeficientes-chave
+
+Esta tabela resume os coeficientes principais já consolidados na Fase 3E e facilita a revisão rápida dos resultados centrais.
+
+```{r}
+#| label: tbl-b6-key-wide
+#| tbl-cap: "Coeficientes-chave por desfecho e modelo (síntese da Fase 3E)."
+
+knitr::kable(
+  tbl_b6_key_wide
+)
+```
+
+## Gráfico: coeficientes IV defasados por desfecho
+
+O gráfico abaixo compara apenas `fit_gdp_g_l` nos modelos IV (principal, robustez e extensões narrow). O objetivo é destacar semelhanças e diferenças de magnitude e precisão entre desfechos.
+
+```{r}
+#| label: fig-b6-iv-lagged-outcomes
+#| fig-cap: "Coeficientes IV de gdp_g_l (defasado) por desfecho e especificação (dados da Fase 3E)."
+
+plot_b6_iv_lag <- tbl_b6_comp_3e |>
+  dplyr::filter(term == "fit_gdp_g_l") |>
+  dplyr::filter(modelo %in% c(
+    "IV second stage (any_prio)",
+    "IV second stage (war_prio)",
+    "IV narrow (any_prio_nar)",
+    "IV narrow (war_prio_nar)"
+  )) |>
+  dplyr::mutate(
+    modelo_plot = factor(
+      modelo,
+      levels = c(
+        "IV second stage (any_prio)",
+        "IV second stage (war_prio)",
+        "IV narrow (any_prio_nar)",
+        "IV narrow (war_prio_nar)"
+      )
+    ),
+    y_id = as.numeric(modelo_plot)
+  )
+
+xmin_b6 <- min(plot_b6_iv_lag$conf.low, na.rm = TRUE) - 0.3
+xmax_b6 <- max(plot_b6_iv_lag$conf.high, na.rm = TRUE) + 0.3
+
+plot(
+  x = plot_b6_iv_lag$estimate,
+  y = plot_b6_iv_lag$y_id,
+  xlim = c(xmin_b6, xmax_b6),
+  yaxt = "n",
+  pch = 19,
+  col = "navy",
+  xlab = "Coeficiente IV estimado (fit_gdp_g_l)",
+  ylab = "Modelo IV"
+)
+axis(2, at = plot_b6_iv_lag$y_id, labels = levels(plot_b6_iv_lag$modelo_plot), las = 1)
+segments(
+  x0 = plot_b6_iv_lag$conf.low,
+  y0 = plot_b6_iv_lag$y_id,
+  x1 = plot_b6_iv_lag$conf.high,
+  y1 = plot_b6_iv_lag$y_id,
+  col = "navy",
+  lwd = 2
+)
+abline(v = 0, lty = 2, col = "gray40")
+```
+
+## Interpretação crítica integrada
+
+Leitura conjunta dos resultados:
+
+1. **OLS (benchmark associativo):** aponta associação negativa entre crescimento e conflito, mas sem validade causal por potencial causalidade reversa e variáveis omitidas.
+2. **Reduced form:** mostra que o instrumento climático (chuva) afeta o desfecho, especialmente no componente defasado (`gpcp_g_l`), compatível com o canal proposto.
+3. **IV/2SLS:** amplia, em módulo, os coeficientes de crescimento em relação ao OLS para `any_prio`, mantendo direção negativa; isso é consistente com viés de atenuação em OLS ou com simultaneidade crescimento-conflito.
+
+Limitações que permanecem, mesmo com IV:
+
+- **Força do instrumento:** first stage com $F < 10$ em parte dos diagnósticos, elevando preocupação com viés finito e imprecisão.
+- **Exclusão:** hipótese substantiva e não testável diretamente; exige plausibilidade teórica do canal chuva $\rightarrow$ crescimento $\rightarrow$ conflito.
+- **Precisão inferencial:** número de clusters (41 países) é limitado para inferência assintótica, recomendando cautela na leitura de significância marginal.
+
+As Tabelas @tbl-b6-comp-main e @tbl-b6-key-wide, junto da Figura @fig-b6-iv-lagged-outcomes, organizam a comparação final entre estratégias e desfechos.
+
+> **Checkpoint conceitual A (identificação)**
+>
+> 1. Em que sentido a reduced form é um pré-requisito lógico para interpretar o IV?
+> 2. Por que relevância (first stage) e exclusão são condições complementares e não substitutas?
+
+> **Checkpoint conceitual B (inferência e escopo)**
+>
+> 1. O que muda na interpretação quando há poucos clusters?
+> 2. Por que o IV deste laboratório deve ser lido como efeito local (LATE), e não como efeito universal?
+
+### Perguntas de revisão para os alunos
+
+1. Compare OLS e IV para `any_prio`: qual diferença principal aparece em sinal, magnitude e precisão?
+2. Se o first stage fosse muito mais forte ($F \gg 10$), o que você esperaria mudar na precisão do IV?
+3. Dê um exemplo de violação plausível da hipótese de exclusão neste contexto e explique como isso enviesaria a interpretação causal.
+4. Por que é metodologicamente incorreto concluir “não há efeito” apenas porque um intervalo de confiança inclui zero?
+
+# Síntese final
+
+## Fechamento didático do laboratório
+
+Este laboratório ensinou, de forma encadeada, como passar de **associação** para **interpretação causal** em dados observacionais:
+
+1. OLS foi usado como benchmark associativo.
+2. First stage e reduced form verificaram a lógica do instrumento.
+3. IV/2SLS estimou o efeito causal local de crescimento sobre conflito sob hipóteses explícitas.
+
+O que os resultados permitem concluir:
+
+- Há evidência consistente de que choques negativos de crescimento estão associados a maior conflito.
+- Sob as hipóteses IV validadas, o efeito causal local estimado de crescimento sobre conflito é negativo, sobretudo no componente defasado.
+- A direção dos resultados é coerente com o artigo de Miguel, Satyanath e Sergenti (2004).
+
+O que os resultados **não** permitem concluir:
+
+- Não permitem inferir um efeito causal universal para todos os países e contextos.
+- Não eliminam completamente dúvidas sobre exclusão do instrumento.
+- Não garantem alta precisão inferencial, dada a força moderada do instrumento e o número limitado de clusters.
+
+Por que o IV foi necessário:
+
+- Porque OLS pode misturar efeito causal com causalidade reversa e omissão de variáveis.
+- O IV isola a variação exógena do crescimento induzida por chuva, tornando a interpretação causal mais defensável.
+
+Limitações remanescentes:
+
+- first stage moderado em parte dos diagnósticos ($F < 10$);
+- hipótese de exclusão substantiva e não testável diretamente;
+- precisão inferencial sensível ao número de clusters.
+
+Em síntese, o Lab07 consolida um aprendizado metodológico central: interpretações causais exigem desenho de identificação, diagnóstico transparente e linguagem substantiva disciplinada.
+
+# Referências / fontes
+
+- Programa da disciplina: `Ceneviva-2026-MAPP-UFABC.pdf`.
+- Fonte primária substantiva: Miguel, Satyanath e Sergenti (2004), `Miguel-etal-2004-paper.pdf`.
+- Handoff final da Fase 3E: `docs/lab07_phase3e_handoff_2026-03-27.md`.
+- Inventário de arquivos: `docs/files_list.md`.
+- Regras operacionais: `AGENTS.md` e `Workflow-Projeto.md`.

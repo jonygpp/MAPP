@@ -1,0 +1,20 @@
+nome_original,nome_padronizado,motivo_da_padronizacao
+CCODE,ccode,padronização para minúsculas no uso interno; alias canônico herdado da Fase 3A
+YEAR_ACTUAL,year_actual,padronização para minúsculas no uso interno; alias canônico reconstituído a partir de `year`
+country_name,country_name,sem padronização adicional necessária
+country_code,country_code,sem padronização adicional necessária
+any_prio,any_prio,sem padronização adicional necessária
+war_prio,war_prio,sem padronização adicional necessária
+any_prio_nar,any_prio_nar,sem padronização adicional necessária
+war_prio_nar,war_prio_nar,sem padronização adicional necessária
+gdp_g,gdp_g,sem padronização adicional necessária
+gdp_g_l,gdp_g_l,sem padronização adicional necessária
+GPCP_g,gpcp_g,normalização de capitalização para reduzir risco sintático em fases seguintes
+GPCP_g_l,gpcp_g_l,normalização de capitalização para reduzir risco sintático em fases seguintes
+y_0,y_0,sem padronização adicional necessária
+polity2l,polity2l,sem padronização adicional necessária
+ethfrac,ethfrac,sem padronização adicional necessária
+relfrac,relfrac,sem padronização adicional necessária
+Oil,oil,normalização de capitalização para reduzir risco sintático em fases seguintes
+lmtnest,lmtnest,sem padronização adicional necessária
+lpopl1,lpopl1,sem padronização adicional necessária
