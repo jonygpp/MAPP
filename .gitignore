@@ -3,3 +3,12 @@
 .RData
 .Ruserdata
 .positai
+
+# Histórico e sessão local do R
+.RData
+.Rhistory
+.Rproj.user/
+
+# Opcional: Se a pasta data/ contiver arquivos com mais de 100MB, 
+# o GitHub não aceitará. Se for o caso, adicione:
+# data/raw/*.csv

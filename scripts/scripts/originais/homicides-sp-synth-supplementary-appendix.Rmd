@@ -1,4 +1,3 @@
-library(Matching)
 ---
 title: "Supplementary Appendix"
 author: "Danilo Freire"
@@ -16,13 +15,13 @@ This file accompanies the article "Evaluating the Effect of Homicide Prevention 
 
 ```{r1,  tidy=TRUE}
 # Clear the workspace
-# rm(list = ls()) # Comentado automaticamente (MAPP)
+rm(list = ls())
 
 # Load necessary packages
 library(reshape2)  # data manipulation
 
 # Dependent variable:
-dep <- read.csv("data/raw/homicide-rates.csv", header = TRUE, skip = 1)
+dep <- read.csv("homicide-rates.csv", header = TRUE, skip = 1)
 
 dep.molten <- melt(dep,
                    id.vars = c("Sigla",
@@ -39,7 +38,7 @@ colnames(dep.molten) <- c("abbreviation",
 dep.molten$year <- as.numeric(substring(dep.molten$year, 2))
 
 # Independent variables
-ind1 <- read.csv("data/raw/state-gdp-capita.csv", header = TRUE, skip = 1)
+ind1 <- read.csv("state-gdp-capita.csv", header = TRUE, skip = 1)
 
 ind1.molten <- melt(ind1,
                     id.vars = c("Sigla",
@@ -55,7 +54,7 @@ colnames(ind1.molten) <- c("abbreviation",
 
 ind1.molten$year <- as.numeric(substring(ind1.molten$year, 2))
 
-ind2 <- read.csv("data/raw/state-gdp-growth-percentage.csv", header = TRUE, skip = 1)
+ind2 <- read.csv("state-gdp-growth-percentage.csv", header = TRUE, skip = 1)
 
 ind2.molten <- melt(ind2,
                     id.vars = c("Sigla",
@@ -71,7 +70,7 @@ colnames(ind2.molten) <- c("abbreviation",
 
 ind2.molten$year <- as.numeric(substring(ind2.molten$year, 2))
 
-ind3 <- read.csv("data/raw/gini.csv", header = TRUE, skip = 1)
+ind3 <- read.csv("gini.csv", header = TRUE, skip = 1)
 
 ind3.molten <- melt(ind3,
                     id.vars = c("Sigla",
@@ -87,7 +86,7 @@ colnames(ind3.molten) <- c("abbreviation",
 
 ind3.molten$year <- as.numeric(substring(ind3.molten$year, 2))
 
-ind4 <- read.csv("data/raw/population-projection.csv",
+ind4 <- read.csv("population-projection.csv",
                  header = TRUE,
                  skip   = 1)
 
@@ -105,7 +104,7 @@ colnames(ind4.molten) <- c("abbreviation",
 
 ind4.molten$year <- as.numeric(substring(ind4.molten$year, 2))
 
-ind5 <- read.csv("data/raw/population-extreme-poverty.csv", header = TRUE, skip = 1)
+ind5 <- read.csv("population-extreme-poverty.csv", header = TRUE, skip = 1)
 
 ind5.molten <- melt(ind5,
                     id.vars = c("Sigla",
@@ -121,7 +120,7 @@ colnames(ind5.molten) <- c("abbreviation",
 
 ind5.molten$year <- as.numeric(substring(ind5.molten$year, 2))
 
-ind6 <- read.csv("data/raw/years-schooling.csv", header = TRUE, skip = 1)
+ind6 <- read.csv("years-schooling.csv", header = TRUE, skip = 1)
 
 ind6.molten <- melt(ind6,
                     id.vars = c("Sigla",
@@ -198,7 +197,7 @@ df$state <- as.character(df$state) # required by dataprep()
 df1 <- df %>%
         mutate(homicide.sp = ifelse(homicide.rates & state == "São Paulo",
                                     homicide.rates, NA)) %>%
-        dplyr::select(year, homicide.sp) 
+        select(year, homicide.sp) 
 
 df2 <- df %>%
         mutate(homicide.rates1 = ifelse(homicide.rates & state != "São Paulo",
@@ -722,3 +721,4 @@ legend(x = "bottomleft",
 ```{r4,   }
 sessionInfo()
 ```
+

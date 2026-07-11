@@ -1,0 +1,9 @@
+"arquivo","existe"
+"output/figures/placebo.png",TRUE
+"output/figures/leave-one-out.png",TRUE
+"output/figures/permutation-gaps2.png",TRUE
+"output/figures/low-mspe.png",TRUE
+"output/tables/placebo_synth_tables.txt",TRUE
+"output/tables/main_synth_tables_for_robustness.txt",TRUE
+"output/tables/rmspe_placebos.csv",TRUE
+"output/tables/rmspe_low_mspe_states.csv",TRUE

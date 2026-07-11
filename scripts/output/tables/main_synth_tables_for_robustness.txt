@@ -1,0 +1,51 @@
+$tab.pred
+                                             Treated Synthetic Sample Mean
+state.gdp.capita                              23.285    23.079      11.830
+state.gdp.growth.percent                       1.330     2.585       3.528
+population.projection.ln                      17.335    14.838      14.867
+years.schooling.imp                            6.089     6.110       4.963
+special.homicide.rates.1990.1998              32.672    32.479      21.843
+special.proportion.extreme.poverty.1990.1998   0.054     0.082       0.185
+special.gini.imp.1990.1998                     0.536     0.561       0.578
+
+$tab.v
+                                             v.weights
+state.gdp.capita                             0.275    
+state.gdp.growth.percent                     0        
+population.projection.ln                     0.001    
+years.schooling.imp                          0.469    
+special.homicide.rates.1990.1998             0.241    
+special.proportion.extreme.poverty.1990.1998 0.009    
+special.gini.imp.1990.1998                   0.005    
+
+$tab.w
+   w.weights          unit.names unit.numbers
+11     0.000            Rondônia           11
+12     0.000                Acre           12
+13     0.000            Amazonas           13
+14     0.137             Roraima           14
+15     0.000                Pará           15
+16     0.000               Amapá           16
+17     0.000           Tocantins           17
+21     0.000            Maranhão           21
+22     0.000               Piauí           22
+23     0.000               Ceará           23
+24     0.000 Rio Grande do Norte           24
+25     0.000             Paraíba           25
+26     0.001          Pernambuco           26
+27     0.000             Alagoas           27
+31     0.000        Minas Gerais           31
+32     0.209      Espírito Santo           32
+33     0.169      Rio de Janeiro           33
+41     0.000              Paraná           41
+42     0.274      Santa Catarina           42
+43     0.000   Rio Grande do Sul           43
+50     0.000  Mato Grosso do Sul           50
+51     0.000         Mato Grosso           51
+52     0.000               Goiás           52
+53     0.210    Distrito Federal           53
+
+$tab.loss
+          Loss W   Loss V
+[1,] 0.007396694 2.660544
+

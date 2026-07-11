@@ -1,6 +1,3 @@
-library(dplyr)
-library(Matching)
-library(ggplot2)
 ########################
 ### Robustness Tests ###
 ########################
@@ -8,10 +5,10 @@ library(ggplot2)
 # Please set your working directory to the data/ folder
 
 # Clear the workspace
-# rm(list = ls()) # Comentado automaticamente (MAPP)
+rm(list = ls())
 
 # Load data
-df <- read.csv("data/raw/df.csv", header = TRUE)
+df <- read.csv("df.csv", header = TRUE)
 
 # Prepare dataset
 df$state <- as.character(df$state) # required by dataprep()
@@ -52,7 +49,7 @@ print(synth.tables   <- synth.tab(
 
 # Placebo test: graph
 setEPS()
-postscript(file = "output/figures/placebo.eps",
+postscript(file    = "placebo.eps",
            horiz   = FALSE,
            onefile = FALSE,
            width   = 7,
@@ -127,7 +124,7 @@ for(k in 1:4){
 
 # Leave-one-out: graph
 setEPS()
-postscript(file = "output/figures/leave-one-out.eps",
+postscript(file    = "leave-one-out.eps",
            horiz   = FALSE,
            onefile = FALSE,
            width   = 7,
@@ -220,7 +217,7 @@ for (i in states) {
 # Permutation test: graph
 ## Permutation test
 setEPS()
-postscript(file = "output/figures/permutation-gaps2.eps",
+postscript(file    = "permutation-gaps2.eps",
            horiz   = FALSE,
            onefile = FALSE,
            width   = 7,
@@ -280,7 +277,7 @@ invisible(dev.off())
 low.mspe <- c(13, 15, 17, 21, 23, 24, 25, 31, 41:43, 53)
 
 setEPS()
-postscript(file = "output/figures/low-mspe.eps",
+postscript(file    = "low-mspe.eps",
            horiz   = FALSE,
            onefile = FALSE,
            width   = 7,
@@ -374,9 +371,54 @@ results <- MarketMatching::inference(matched_markets = mm,
 results$Predictions
 
 # Plot results
-dados_plot <- results$PlotActualVersusExpected$data
-dados_plot$test_market <- as.numeric(as.character(dados_plot$test_market))
-ggplot(data = dados_plot, aes(x = 1:nrow(dados_plot), y = test_market)) +
-  geom_line(colour='#000099') +
-  ggtitle('São Paulo versus Synthetic São Paulo') + 
-  theme_bw()
+results$PlotActualVersusExpected +
+        ggtitle("São Paulo versus Synthetic São Paulo") + theme_bw() +
+        geom_line(aes(results$PlotActualVersusExpected$data$test_market),colour="#000099")
+results$PlotCumulativeEffect
+
+# Graph
+setEPS()
+postscript(file    = "causal-impact.eps",
+           horiz   = FALSE,
+           onefile = FALSE,
+           width   = 7,     # 17.8 cm
+           height  = 5.25)  # 13.3 cm
+
+plot(x = (1990:2009),
+     y = as.numeric(results$Predictions$Response),
+     type = "l",
+     ylim = c(0, 60),
+     xlim = c(1990, 2009),
+     xlab = "Year",
+     ylab = "Homicide Rates",
+     cex = 3,
+     lwd = 2)
+
+lines(x = (1990:2009),
+      y = as.numeric(results$Predictions$Predicted),
+      type = "l",
+      lty = 2,
+      cex = 3,
+      lwd = 2)
+
+arrows(1997, 50, 1999, 50,
+       col    = "black",
+       length = .1)
+
+text(1995, 50,
+     "Policy Change",
+     cex = .8)
+
+abline(v   = 1999,
+       lty = 2)
+
+legend(x = "bottomleft",
+       legend = c("São Paulo",
+                  "Brazil (average)"),
+       lty    = c("solid", "dashed"),
+       cex    = .8,
+       bg     = "white",
+       lwdc(2, 2)
+)
+
+invisible(dev.off())
